@@ -82,6 +82,7 @@ file(GLOB IMGUI_SOURCES
 # Main executable
 add_executable(prism 
     src/main.cpp 
+    src/filesystem_node.cpp
     ${IMGUI_SOURCES} 
 )
 
