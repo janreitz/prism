@@ -51,14 +51,21 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(spdlog)
 
+FetchContent_Declare(
+    imgui
+    GIT_REPOSITORY https://github.com/ocornut/imgui.git
+    GIT_TAG        docking
+)
+FetchContent_MakeAvailable(imgui)
+
 find_package(OpenGL REQUIRED)
 
 # Include directories
 include_directories(
     src
     third_party/glfw/include
-    third_party/imgui
-    third_party/imgui/backends
+    ${imgui_SOURCE_DIR}
+    ${imgui_SOURCE_DIR}/backends
     third_party/glad/include
     third_party/glm-master
     third_party/stb
@@ -74,9 +81,9 @@ target_include_directories(glad PUBLIC third_party/glad/include)
 
 # ImGui Setup
 file(GLOB IMGUI_SOURCES
-    third_party/imgui/*.cpp
-    third_party/imgui/backends/imgui_impl_glfw.cpp
-    third_party/imgui/backends/imgui_impl_opengl3.cpp
+    ${imgui_SOURCE_DIR}/*.cpp
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
 )
 
 # Main executable
