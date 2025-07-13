@@ -3,6 +3,7 @@
 #include <cmath>
 #include <functional>
 #include <imgui.h>
+#include <iostream>
 #include <limits>
 #include <optional>
 #include <string>
@@ -60,13 +61,15 @@ template <TreeNode T> class TreeMapWidget
     std::vector<RenderedRect<T>> rendered_rects_;
     std::vector<const T *> flattened_nodes_;
 
-    void flatten_tree(const T &node);
     void calculate_layout(const ImVec2 &availableSize);
-    void squarify_layout(std::vector<int> &indices, float x, float y,
-                         float width, float height);
-    float calculate_aspect_ratio(const std::vector<int> &indices, float side);
-    void place_rectangles(const std::vector<int> &indices, float x, float y,
-                          float width, float height, bool horizontal);
+    void layout_recursive(const T &node, float x, float y, float width,
+                          float height);
+    void squarify_children(const std::vector<const T *> &children, float x,
+                           float y, float width, float height);
+    float calculate_aspect_ratio(const std::vector<const T *> &children,
+                                 float side);
+    void place_rectangles(const std::vector<const T *> &children, float x,
+                          float y, float width, float height, bool horizontal);
 };
 
 // Template implementation
@@ -96,166 +99,82 @@ template <TreeNode T> const T &TreeMapWidget<T>::get_selected_node() const
     return *selected_node_;
 }
 
-template <TreeNode T> void TreeMapWidget<T>::flatten_tree(const T &node)
-{
-    flattened_nodes_.push_back(&node);
-
-    auto children = node.children();
-    for (const T *child : children) {
-        flatten_tree(*child);
-    }
-}
-
 template <TreeNode T>
 void TreeMapWidget<T>::calculate_layout(const ImVec2 &availableSize)
 {
-    flattened_nodes_.clear();
     rendered_rects_.clear();
 
-    flatten_tree(root_.get());
-
-    if (flattened_nodes_.empty())
-        return;
-
-    // Sort nodes by size (descending)
-    std::sort(flattened_nodes_.begin(), flattened_nodes_.end(),
-              [](const T *a, const T *b) { return a->size() > b->size(); });
-
-    std::vector<int> indices;
-    for (size_t i = 0; i < flattened_nodes_.size(); ++i) {
-        indices.push_back(static_cast<int>(i));
-    }
-
-    squarify_layout(indices, 0, 0, availableSize.x, availableSize.y);
+    // Start recursive layout from root, using entire available space
+    layout_recursive(root_.get(), 0, 0, availableSize.x, availableSize.y);
 }
 
 template <TreeNode T>
-void TreeMapWidget<T>::squarify_layout(std::vector<int> &indices, float x,
-                                       float y, float width, float height)
+void TreeMapWidget<T>::layout_recursive(const T &node, float x, float y,
+                                        float width, float height)
 {
-    if (indices.empty())
-        return;
+    auto children = node.children();
 
-    if (indices.size() == 1) {
-        const T *node = flattened_nodes_[indices[0]];
-        rendered_rects_.emplace_back(node, x, y, width, height);
+    if (width <= 0 || height <= 0) {
         return;
     }
 
+    if (children.empty()) {
+        rendered_rects_.emplace_back(&node, x, y, width, height);
+        return;
+    }
+
+    // If it's a directory, recursively layout children within this space
+    if (!children.empty()) {
+        // Convert to const pointers
+        std::vector<const T *> const_children;
+        for (T *child : children) {
+            const_children.push_back(child);
+        }
+        squarify_children(const_children, x, y, width, height);
+    }
+}
+
+template <TreeNode T>
+void TreeMapWidget<T>::squarify_children(const std::vector<const T *> &children,
+                                         float x, float y, float width,
+                                         float height)
+{
+    if (children.empty() || width <= 0 || height <= 0)
+        return;
+
+    if (children.size() == 1) {
+        layout_recursive(*children[0], x, y, width, height);
+        return;
+    }
+
+    // For simplicity, let's use a basic row-based layout first
+    // This will help debug the hierarchy before adding complexity
+
+    float total_size = 0;
+    for (const T *child : children) {
+        total_size += child->size();
+    }
+
+    if (total_size == 0)
+        return;
+
+    // Simple horizontal or vertical split based on aspect ratio
     bool horizontal = width >= height;
-    float side = horizontal ? height : width;
-
-    std::vector<int> row;
-    float current_area = 0;
-    float total_area = 0;
-
-    for (int idx : indices) {
-        total_area += flattened_nodes_[idx]->size();
-    }
-
-    float scale = (width * height) / total_area;
-
-    size_t i = 0;
-    while (i < indices.size()) {
-        row.push_back(indices[i]);
-        current_area += flattened_nodes_[indices[i]]->size() * scale;
-
-        float current_ratio = calculate_aspect_ratio(row, side);
-
-        if (i + 1 < indices.size()) {
-            std::vector<int> next_row = row;
-            next_row.push_back(indices[i + 1]);
-            float next_ratio = calculate_aspect_ratio(next_row, side);
-
-            if (next_ratio > current_ratio) {
-                break;
-            }
-        }
-
-        i++;
-    }
-
-    place_rectangles(row, x, y, width, height, horizontal);
-
-    std::vector<int> remaining(indices.begin() + row.size(), indices.end());
-    if (!remaining.empty()) {
-        float row_thickness = current_area / side;
-
-        if (horizontal) {
-            squarify_layout(remaining, x, y + row_thickness, width,
-                            height - row_thickness);
-        } else {
-            squarify_layout(remaining, x + row_thickness, y,
-                            width - row_thickness, height);
-        }
-    }
-}
-
-template <TreeNode T>
-float TreeMapWidget<T>::calculate_aspect_ratio(const std::vector<int> &indices,
-                                               float side)
-{
-    if (indices.empty())
-        return 1.0f;
-
-    float total_area = 0;
-    float min_value = std::numeric_limits<float>::max();
-    float max_value = 0;
-
-    for (int idx : indices) {
-        float value = flattened_nodes_[idx]->size();
-        total_area += value;
-        min_value = std::min(min_value, value);
-        max_value = std::max(max_value, value);
-    }
-
-    if (total_area == 0)
-        return 1.0f;
-
-    float thickness = total_area / side;
-    float min_side = min_value / thickness;
-    float max_side = max_value / thickness;
-
-    float ratio1 = thickness / min_side;
-    float ratio2 = max_side / thickness;
-
-    return std::max(ratio1, ratio2);
-}
-
-template <TreeNode T>
-void TreeMapWidget<T>::place_rectangles(const std::vector<int> &indices,
-                                        float x, float y, float width,
-                                        float height, bool horizontal)
-{
-    if (indices.empty())
-        return;
-
-    float total_value = 0;
-    for (int idx : indices) {
-        total_value += flattened_nodes_[idx]->size();
-    }
-
-    if (total_value == 0)
-        return;
-
     float current_offset = 0;
-    float total_area = width * height;
-    float scale = total_area / total_value;
 
-    for (int idx : indices) {
-        const T *node = flattened_nodes_[idx];
-        float node_area = node->size() * scale;
+    for (const T *child : children) {
+        float proportion = child->size() / total_size;
 
         if (horizontal) {
-            float node_width = node_area / height;
-            rendered_rects_.emplace_back(node, x + current_offset, y,
-                                         node_width, height);
-            current_offset += node_width;
+            float child_width = proportion * width;
+            layout_recursive(*child, x + current_offset, y, child_width,
+                             height);
+            current_offset += child_width;
         } else {
-            float node_height = node_area / width;
-            rendered_rects_.emplace_back(node, x, y + current_offset, width,
-                                         node_height);
-            current_offset += node_height;
+            float child_height = proportion * height;
+            layout_recursive(*child, x, y + current_offset, width,
+                             child_height);
+            current_offset += child_height;
         }
     }
 }
@@ -269,12 +188,21 @@ bool TreeMapWidget<T>::Render(const char *label, const ImVec2 &size)
     ImVec2 canvas_size = ImGui::GetContentRegionAvail();
     ImDrawList *draw_list = ImGui::GetWindowDrawList();
 
+    // Use actual content region size for layout calculation
     if (canvas_size.x < 50.0f)
         canvas_size.x = 50.0f;
     if (canvas_size.y < 50.0f)
         canvas_size.y = 50.0f;
 
     calculate_layout(canvas_size);
+
+    // Debug: Ensure all rectangles are within bounds
+    for (auto &rect : rendered_rects_) {
+        rect.x = std::max(0.0f, std::min(rect.x, canvas_size.x - rect.width));
+        rect.y = std::max(0.0f, std::min(rect.y, canvas_size.y - rect.height));
+        rect.width = std::min(rect.width, canvas_size.x - rect.x);
+        rect.height = std::min(rect.height, canvas_size.y - rect.y);
+    }
 
     ImGui::InvisibleButton("treemap_canvas", canvas_size);
     bool is_hovered = ImGui::IsItemHovered();

@@ -265,7 +265,12 @@ int main()
             ImGui::Separator();
 
             if (treemap) {
-                treemap->Render("treemap", ImVec2(0, 300));
+                // Use remaining available space for treemap
+                ImVec2 available = ImGui::GetContentRegionAvail();
+                // Reserve space for the info text below
+                available.y -= 80; // Leave room for separator and text lines
+                if (available.y < 100) available.y = 100; // Minimum height
+                treemap->Render("treemap", available);
             } else {
                 ImGui::Text(
                     "No data available - please select a valid directory");
