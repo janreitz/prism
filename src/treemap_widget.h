@@ -17,24 +17,44 @@ concept TreeNode = requires(T t) {
     { t.children() } -> std::convertible_to<std::vector<T *>>;
 };
 
-// Layout structures - pure calculation, no rendering
 struct Rect {
     float x, y, width, height;
-
-    float shorter_side() const { return std::min(width, height); }
-    bool is_horizontal() const { return width >= height; }
-    float area() const { return width * height; }
 };
 
-// Rendering structures - for visualization
+float shorter_side(const Rect &r) { return std::min(r.width, r.height); }
+bool is_horizontal(const Rect &r) { return r.width >= r.height; }
+ImVec2 rect_min(const Rect &r) { return {r.x, r.y}; }
+ImVec2 rect_max(const Rect &r) { return {r.x + r.width, r.y + r.height}; }
+
 template <TreeNode T> struct RenderedRect {
     const T *node;
-    float x, y, width, height;
-    bool hovered = false;
+    Rect rect;
 
     RenderedRect(const T *n, float x_, float y_, float w_, float h_)
-        : node(n), x(x_), y(y_), width(w_), height(h_)
+        : node(n), rect(Rect{.x = x_, .y = y_, .width = w_, .height = h_})
     {
+    }
+};
+
+template <TreeNode T>
+auto hit_test(ImVec2 test, const std::vector<RenderedRect<T>> &rects,
+              ImVec2 offset) -> const T *
+{
+    auto hovered_rect_it =
+        std::find_if(rects.cbegin(), rects.cend(),
+                     [&offset, &test](const RenderedRect<T> &rect) -> bool {
+                         const ImVec2 rect_min(offset.x + rect.rect.x,
+                                               offset.y + rect.rect.y);
+                         const ImVec2 rect_max(rect_min.x + rect.rect.width,
+                                               rect_min.y + rect.rect.height);
+                         return test.x >= rect_min.x && test.x <= rect_max.x &&
+                                test.y >= rect_min.y && test.y <= rect_max.y;
+                     });
+
+    if (hovered_rect_it == rects.cend()) {
+        return nullptr;
+    } else {
+        return hovered_rect_it->node;
     }
 };
 
@@ -125,8 +145,8 @@ TreeMapWidget<T>::calculate_layout(const T &root, const Rect &available_rect)
     auto children = root.children();
     if (children.empty()) {
         // Leaf node - return single rectangle
-        return {RenderedRect<T>(&root, available_rect.x, available_rect.y, 
-                               available_rect.width, available_rect.height)};
+        return {RenderedRect<T>(&root, available_rect.x, available_rect.y,
+                                available_rect.width, available_rect.height)};
     }
 
     // Convert to const pointers
@@ -144,6 +164,8 @@ TreeMapWidget<T>::calculate_layout(const T &root, const Rect &available_rect)
         auto child_rects = calculate_layout(*child_node, child_rect);
         result.insert(result.end(), child_rects.begin(), child_rects.end());
     }
+
+    // TODO assert recatngles are non-overlapping and within bounds
 
     return result;
 }
@@ -199,9 +221,9 @@ TreeMapWidget<T>::squarify_recursive(const std::vector<const T *> &children,
     test_row.push_back(next_child);
 
     float current_worst =
-        worst_aspect_ratio(current_row, available_rect.shorter_side());
+        worst_aspect_ratio(current_row, shorter_side(available_rect));
     float test_worst =
-        worst_aspect_ratio(test_row, available_rect.shorter_side());
+        worst_aspect_ratio(test_row, shorter_side(available_rect));
 
     if (test_worst <= current_worst) {
         // Adding child improves layout - continue building current row
@@ -244,8 +266,8 @@ TreeMapWidget<T>::position_row(const std::vector<const T *> &row,
     }
 
     // Determine row orientation based on available space
-    bool horizontal = available_rect.is_horizontal();
-    float row_width = available_rect.shorter_side();
+    bool horizontal = is_horizontal(available_rect);
+    float row_width = shorter_side(available_rect);
     float row_height = total_area / row_width;
 
     // Position each rectangle in the row
@@ -317,8 +339,8 @@ Rect TreeMapWidget<T>::layout_row(const std::vector<const T *> &row,
     }
 
     // Determine row orientation based on available space
-    bool horizontal = available_rect.is_horizontal();
-    float row_width = available_rect.shorter_side();
+    bool horizontal = is_horizontal(available_rect);
+    float row_width = shorter_side(available_rect);
     float row_height = total_area / row_width;
 
     // Calculate remaining space after placing this row
@@ -343,54 +365,35 @@ bool TreeMapWidget<T>::render(const char *label, const ImVec2 &size)
     ImVec2 canvas_size = ImGui::GetContentRegionAvail();
     ImDrawList *draw_list = ImGui::GetWindowDrawList();
 
-    // Use actual content region size for layout calculation
-    if (canvas_size.x < 50.0f)
-        canvas_size.x = 50.0f;
-    if (canvas_size.y < 50.0f)
-        canvas_size.y = 50.0f;
-
     // Calculate layout and get rendered rectangles directly
     Rect available_rect{0, 0, canvas_size.x, canvas_size.y};
     rendered_rects_ = calculate_layout(root_.get(), available_rect);
 
-    // Debug: Ensure all rectangles are within bounds
-    for (auto &rect : rendered_rects_) {
-        rect.x = std::max(0.0f, std::min(rect.x, canvas_size.x - rect.width));
-        rect.y = std::max(0.0f, std::min(rect.y, canvas_size.y - rect.height));
-        rect.width = std::min(rect.width, canvas_size.x - rect.x);
-        rect.height = std::min(rect.height, canvas_size.y - rect.y);
-    }
-
-    // TODO assert recatngles are non-overlapping
-
     ImGui::InvisibleButton("treemap_canvas", canvas_size);
-    bool is_hovered = ImGui::IsItemHovered();
-    ImVec2 mouse_pos = ImGui::GetMousePos();
 
-    hovered_node_ = nullptr;
+    if (ImGui::IsItemHovered()) {
 
-    // TODO Refactor rect lookup
-    for (auto &rect : rendered_rects_) {
-        ImVec2 rect_min(canvas_pos.x + rect.x, canvas_pos.y + rect.y);
-        ImVec2 rect_max(rect_min.x + rect.width, rect_min.y + rect.height);
+        const auto *currently_hovered_node =
+            hit_test(ImGui::GetMousePos(), rendered_rects_, canvas_pos);
 
-        rect.hovered = is_hovered && mouse_pos.x >= rect_min.x &&
-                       mouse_pos.x <= rect_max.x && mouse_pos.y >= rect_min.y &&
-                       mouse_pos.y <= rect_max.y;
-
-        if (rect.hovered) {
-            hovered_node_ = rect.node;
+        // Only execute callbacks if hovered node changed and is currenlty not
+        // nullptr
+        if (currently_hovered_node && currently_hovered_node != hovered_node_) {
             for (const auto &callback : node_hover_cbs_) {
-                callback(*rect.node);
+                callback(*currently_hovered_node);
             }
         }
+        hovered_node_ = currently_hovered_node;
+    }
+
+    for (auto &rect : rendered_rects_) {
 
         ImU32 fill_color = IM_COL32(100, 150, 200, 255); // Default color
         if (coloring_strategy_) {
             fill_color = (*coloring_strategy_)(*rect.node);
         }
 
-        if (rect.hovered) {
+        if (rect.node == hovered_node_) {
             float r = ((fill_color >> 0) & 0xFF) / 255.0f;
             float g = ((fill_color >> 8) & 0xFF) / 255.0f;
             float b = ((fill_color >> 16) & 0xFF) / 255.0f;
@@ -405,25 +408,25 @@ bool TreeMapWidget<T>::render(const char *label, const ImVec2 &size)
                          static_cast<int>(b * 255), static_cast<int>(a * 255));
         }
 
-        if (selected_node_ == rect.node) {
-            draw_list->AddRectFilled(rect_min, rect_max,
+        if (rect.node == selected_node_) {
+            draw_list->AddRectFilled(rect_min(rect.rect), rect_max(rect.rect),
                                      IM_COL32(255, 255, 0, 100));
         }
 
-        draw_list->AddRectFilled(rect_min, rect_max, fill_color);
-        draw_list->AddRect(rect_min, rect_max, IM_COL32(255, 255, 255, 180),
-                           0.0f, 0, 1.5f);
+        draw_list->AddRectFilled(rect_min(rect.rect), rect_max(rect.rect),
+                                 fill_color);
+        draw_list->AddRect(rect_min(rect.rect), rect_max(rect.rect),
+                           IM_COL32(255, 255, 255, 180), 0.0f, 0, 1.5f);
     }
 
     bool clicked = false;
-    if (is_hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-        if (hovered_node_) {
-            selected_node_ = hovered_node_;
-            for (const auto &callback : node_clicked_cbs_) {
-                callback(*hovered_node_);
-            }
-            clicked = true;
+    if (hovered_node_ && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+
+        selected_node_ = hovered_node_;
+        for (const auto &callback : node_clicked_cbs_) {
+            callback(*hovered_node_);
         }
+        clicked = true;
     }
 
     ImGui::EndChild();
