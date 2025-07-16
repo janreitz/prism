@@ -26,14 +26,6 @@ struct Rect {
     float area() const { return width * height; }
 };
 
-template <TreeNode T> struct LayoutNode {
-    Rect rect;
-    const T *data_node;
-    std::vector<std::unique_ptr<LayoutNode<T>>> children;
-
-    LayoutNode(const T *node, const Rect &r) : data_node(node), rect(r) {}
-};
-
 // Rendering structures - for visualization
 template <TreeNode T> struct RenderedRect {
     const T *node;
@@ -51,7 +43,7 @@ template <TreeNode T> class TreeMapWidget
   public:
     explicit TreeMapWidget(const T &root);
 
-    bool Render(const char *label, const ImVec2 &size);
+    bool render(const char *label, const ImVec2 &size);
 
     void set_coloring_strategy(
         const std::function<ImU32(const T &)> &coloring_strategy);
@@ -80,8 +72,8 @@ template <TreeNode T> class TreeMapWidget
     std::vector<RenderedRect<T>> rendered_rects_;
 
     // Layout calculation methods
-    std::unique_ptr<LayoutNode<T>> calculate_layout(const T &root,
-                                                    const Rect &available_rect);
+    std::vector<RenderedRect<T>> calculate_layout(const T &root,
+                                                  const Rect &available_rect);
     std::vector<std::pair<const T *, Rect>>
     squarify_layout(const std::vector<const T *> &children,
                     const Rect &available_rect);
@@ -95,7 +87,6 @@ template <TreeNode T> class TreeMapWidget
                              float row_width);
 
     // Rendering methods
-    void render_layout_tree(const LayoutNode<T> &layout_root);
     std::vector<std::pair<const T *, Rect>>
     position_row(const std::vector<const T *> &row, const Rect &available_rect);
 };
@@ -128,14 +119,14 @@ template <TreeNode T> const T &TreeMapWidget<T>::get_selected_node() const
 }
 
 template <TreeNode T>
-std::unique_ptr<LayoutNode<T>>
+std::vector<RenderedRect<T>>
 TreeMapWidget<T>::calculate_layout(const T &root, const Rect &available_rect)
 {
-    auto layout_root = std::make_unique<LayoutNode<T>>(&root, available_rect);
-
     auto children = root.children();
     if (children.empty()) {
-        return layout_root;
+        // Leaf node - return single rectangle
+        return {RenderedRect<T>(&root, available_rect.x, available_rect.y, 
+                               available_rect.width, available_rect.height)};
     }
 
     // Convert to const pointers
@@ -147,13 +138,14 @@ TreeMapWidget<T>::calculate_layout(const T &root, const Rect &available_rect)
     // Calculate layout for all children using squarify
     auto child_layouts = squarify_layout(const_children, available_rect);
 
-    // Recursively calculate layout for each child
+    // Recursively calculate layout for each child and flatten results
+    std::vector<RenderedRect<T>> result;
     for (const auto &[child_node, child_rect] : child_layouts) {
-        auto child_layout = calculate_layout(*child_node, child_rect);
-        layout_root->children.push_back(std::move(child_layout));
+        auto child_rects = calculate_layout(*child_node, child_rect);
+        result.insert(result.end(), child_rects.begin(), child_rects.end());
     }
 
-    return layout_root;
+    return result;
 }
 
 template <TreeNode T>
@@ -343,26 +335,7 @@ Rect TreeMapWidget<T>::layout_row(const std::vector<const T *> &row,
 }
 
 template <TreeNode T>
-void TreeMapWidget<T>::render_layout_tree(const LayoutNode<T> &layout_root)
-{
-    const auto &children = layout_root.children;
-
-    if (children.empty()) {
-        // Leaf node - add to rendered rectangles
-        rendered_rects_.emplace_back(layout_root.data_node, layout_root.rect.x,
-                                     layout_root.rect.y, layout_root.rect.width,
-                                     layout_root.rect.height);
-        return;
-    }
-
-    // Directory node - recursively render children
-    for (const auto &child : children) {
-        render_layout_tree(*child);
-    }
-}
-
-template <TreeNode T>
-bool TreeMapWidget<T>::Render(const char *label, const ImVec2 &size)
+bool TreeMapWidget<T>::render(const char *label, const ImVec2 &size)
 {
     ImGui::BeginChild(label, size, true, ImGuiWindowFlags_NoScrollbar);
 
@@ -376,11 +349,9 @@ bool TreeMapWidget<T>::Render(const char *label, const ImVec2 &size)
     if (canvas_size.y < 50.0f)
         canvas_size.y = 50.0f;
 
-    // Calculate layout using new architecture
-    rendered_rects_.clear();
+    // Calculate layout and get rendered rectangles directly
     Rect available_rect{0, 0, canvas_size.x, canvas_size.y};
-    auto layout_tree = calculate_layout(root_.get(), available_rect);
-    render_layout_tree(*layout_tree);
+    rendered_rects_ = calculate_layout(root_.get(), available_rect);
 
     // Debug: Ensure all rectangles are within bounds
     for (auto &rect : rendered_rects_) {
