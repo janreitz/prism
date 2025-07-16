@@ -270,7 +270,7 @@ layoutrow(const std::vector<const T *> &row, const Rect &available_rect)
 
     // Determine row orientation based on available space
     bool horizontal = is_horizontal(available_rect);
-    float row_width = shorter_side(available_rect);
+    float row_width = width(available_rect);
     float row_height = total_area / row_width;
 
     // Position each rectangle in the row
