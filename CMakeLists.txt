@@ -52,6 +52,13 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(spdlog)
 
 FetchContent_Declare(
+    Catch2
+    GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+    GIT_TAG        v3.4.0
+)
+FetchContent_MakeAvailable(Catch2)
+
+FetchContent_Declare(
     imgui
     GIT_REPOSITORY https://github.com/ocornut/imgui.git
     GIT_TAG        docking
@@ -100,3 +107,23 @@ target_link_libraries(prism
         OpenGL::GL
         spdlog::spdlog
 )
+
+# Enable testing
+enable_testing()
+
+# Test executable
+add_executable(layout_tests
+    tests/test_layout.cpp
+    src/filesystem_node.cpp
+)
+
+target_link_libraries(layout_tests
+    PRIVATE
+        Catch2::Catch2WithMain
+        spdlog::spdlog
+)
+
+# Register test with CTest
+include(CTest)
+include(Catch)
+catch_discover_tests(layout_tests)
