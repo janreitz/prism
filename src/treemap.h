@@ -106,36 +106,11 @@ float worst_aspect_ratio(const std::vector<const T *> &row, float row_width)
     return max_aspect_ratio;
 }
 
-template <TreeNode T>
-std::vector<RenderedRect<T>> calculate_layout(const T &root,
-                                              const Rect &available_rect)
+template <TreeNode T> bool validate_layout(std::vector<RenderedRect<T>> layout)
 {
-    auto children = root.children();
-    if (children.empty()) {
-        // Leaf node - return single rectangle
-        return {RenderedRect<T>(&root, available_rect.x, available_rect.y,
-                                available_rect.width, available_rect.height)};
-    }
-
-    // Convert to const pointers
-    std::vector<const T *> const_children;
-    for (T *child : children) {
-        const_children.push_back(child);
-    }
-
-    // Calculate layout for all children using squarify
-    auto child_layouts = squarify_layout(const_children, available_rect);
-
-    // Recursively calculate layout for each child and flatten results
-    std::vector<RenderedRect<T>> result;
-    for (const auto &[child_node, child_rect] : child_layouts) {
-        auto child_rects = calculate_layout(*child_node, child_rect);
-        result.insert(result.end(), child_rects.begin(), child_rects.end());
-    }
-
     // Assert rectangles are non-overlapping and within bounds
     auto rect_view =
-        result | std::views::transform([](const auto &rr) { return rr.rect; });
+        layout | std::views::transform([](const auto &rr) { return rr.rect; });
     auto combination_view = std::views::cartesian_product(rect_view, rect_view);
 
     // Check no overlaps
@@ -148,30 +123,41 @@ std::vector<RenderedRect<T>> calculate_layout(const T &root,
     assert(std::ranges::all_of(rect_view, [&](const Rect &rect) {
         return within_bounds(rect, available_rect);
     }));
-
-    return result;
 }
 
 template <TreeNode T>
-std::vector<std::pair<const T *, Rect>>
-squarify_layout(const std::vector<const T *> &children,
-                const Rect &available_rect)
+std::vector<RenderedRect<T>> layout_squarify(RenderedRect<T> rect)
 {
-    if (children.empty() || available_rect.width <= 0 ||
-        available_rect.height <= 0)
-        return {};
+    const auto &root = rect->node();
+    const auto &children = root.children();
 
-    if (children.size() == 1) {
-        return {{children[0], available_rect}};
-    }
+    // Leaf node, just return the parameter itself
+    if (children.empty() || rect.rect.width <= 0 || rect.rect.height <= 0)
+        return {rect};
 
+    std::vector<RenderedRect<T>> result;
+
+    // Actual squarify
     // Sort children by decreasing size for better layout
     std::vector<const T *> sorted_children = children;
     std::sort(sorted_children.begin(), sorted_children.end(),
               [](const T *a, const T *b) { return a->size() > b->size(); });
 
-    // Start squarify algorithm
-    return squarify_recursive(sorted_children, {}, available_rect);
+    // actual squarify
+
+    // Recursively calculate layout for each child and flatten results
+    for (const auto &[child_node, child_rect] : child_layouts) {
+        result.insert(result.end(), child_rects.begin(), child_rects.end());
+    }
+
+    // Recurse
+    for (const auto &child : children) {
+        layout_squarify(sorted_children, {}, available_rect);
+    }
+
+    validate_layout(result);
+
+    return
 }
 
 template <TreeNode T>
