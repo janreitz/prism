@@ -376,7 +376,7 @@ bool TreeMapWidget<T>::render(const char *label, const ImVec2 &size)
         const auto *currently_hovered_node =
             hit_test(ImGui::GetMousePos(), rendered_rects_, canvas_pos);
 
-        // Only execute callbacks if hovered node changed and is currenlty not
+        // Only execute callbacks if hovered node changed and is currently not
         // nullptr
         if (currently_hovered_node && currently_hovered_node != hovered_node_) {
             for (const auto &callback : node_hover_cbs_) {
@@ -408,15 +408,19 @@ bool TreeMapWidget<T>::render(const char *label, const ImVec2 &size)
                          static_cast<int>(b * 255), static_cast<int>(a * 255));
         }
 
+        ImVec2 screen_min(canvas_pos.x + rect.rect.x,
+                          canvas_pos.y + rect.rect.y);
+        ImVec2 screen_max(screen_min.x + rect.rect.width,
+                          screen_min.y + rect.rect.height);
+
         if (rect.node == selected_node_) {
-            draw_list->AddRectFilled(rect_min(rect.rect), rect_max(rect.rect),
+            draw_list->AddRectFilled(screen_min, screen_max,
                                      IM_COL32(255, 255, 0, 100));
         }
 
-        draw_list->AddRectFilled(rect_min(rect.rect), rect_max(rect.rect),
-                                 fill_color);
-        draw_list->AddRect(rect_min(rect.rect), rect_max(rect.rect),
-                           IM_COL32(255, 255, 255, 180), 0.0f, 0, 1.5f);
+        draw_list->AddRectFilled(screen_min, screen_max, fill_color);
+        draw_list->AddRect(screen_min, screen_max, IM_COL32(255, 255, 255, 180),
+                           0.0f, 0, 1.5f);
     }
 
     bool clicked = false;
