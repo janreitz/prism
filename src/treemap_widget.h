@@ -1,5 +1,6 @@
 #pragma once
 #include <algorithm>
+#include <cassert>
 #include <cmath>
 #include <functional>
 #include <imgui.h>
@@ -25,6 +26,19 @@ float shorter_side(const Rect &r) { return std::min(r.width, r.height); }
 bool is_horizontal(const Rect &r) { return r.width >= r.height; }
 ImVec2 rect_min(const Rect &r) { return {r.x, r.y}; }
 ImVec2 rect_max(const Rect &r) { return {r.x + r.width, r.y + r.height}; }
+
+bool overlaps(const Rect &a, const Rect &b)
+{
+    return !(a.x + a.width <= b.x || b.x + b.width <= a.x ||
+             a.y + a.height <= b.y || b.y + b.height <= a.y);
+}
+
+bool within_bounds(const Rect &rect, const Rect &bounds)
+{
+    return rect.x >= bounds.x && rect.y >= bounds.y &&
+           rect.x + rect.width <= bounds.x + bounds.width &&
+           rect.y + rect.height <= bounds.y + bounds.height;
+}
 
 template <TreeNode T> struct RenderedRect {
     const T *node;
@@ -165,7 +179,22 @@ TreeMapWidget<T>::calculate_layout(const T &root, const Rect &available_rect)
         result.insert(result.end(), child_rects.begin(), child_rects.end());
     }
 
-    // TODO assert recatngles are non-overlapping and within bounds
+    // Assert rectangles are non-overlapping and within bounds
+    auto rect_view =
+        result | std::views::transform([](const auto &rr) { return rr.rect; });
+    auto combination_view = std::views::cartesian_product(rect_view, rect_view);
+
+    // Check no overlaps
+    assert(std::ranges::none_of(combination_view, [](const auto &pair) {
+        const auto &[rect1, rect2] = pair;
+        // exclude self-pairs by comparing addresses
+        return &rect1 != &rect2 && overlaps(rect1, rect2);
+    }));
+
+    // Check all rectangles are within bounds
+    assert(std::ranges::all_of(rect_view, [&](const Rect &rect) {
+        return within_bounds(rect, available_rect);
+    }));
 
     return result;
 }
