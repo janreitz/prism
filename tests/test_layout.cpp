@@ -263,3 +263,270 @@ TEST_CASE("TreeMap Layout - Leaf Node", "[layout]")
     REQUIRE(result[0].rect.width == 80);
     REQUIRE(result[0].rect.height == 60);
 }
+
+// ========================================
+// UNIT TESTS FOR INDIVIDUAL FUNCTIONS
+// ========================================
+
+TEST_CASE("Geometry Functions", "[geometry]") {
+    SECTION("width function") {
+        Rect rect1{0, 0, 100, 50};  // wider than tall
+        REQUIRE(width(rect1) == 50);
+        
+        Rect rect2{0, 0, 30, 80};   // taller than wide
+        REQUIRE(width(rect2) == 30);
+        
+        Rect rect3{0, 0, 50, 50};   // square
+        REQUIRE(width(rect3) == 50);
+    }
+    
+    SECTION("is_horizontal function") {
+        Rect rect1{0, 0, 100, 50};  // wider than tall
+        REQUIRE(is_horizontal(rect1) == true);
+        
+        Rect rect2{0, 0, 30, 80};   // taller than wide
+        REQUIRE(is_horizontal(rect2) == false);
+        
+        Rect rect3{0, 0, 50, 50};   // square
+        REQUIRE(is_horizontal(rect3) == true);  // width >= height
+    }
+    
+    SECTION("overlaps function") {
+        Rect rect1{0, 0, 50, 50};
+        Rect rect2{25, 25, 50, 50};  // overlaps
+        Rect rect3{60, 60, 30, 30};  // no overlap
+        Rect rect4{50, 0, 30, 30};   // touching edge (no overlap)
+        
+        REQUIRE(overlaps(rect1, rect2) == true);
+        REQUIRE(overlaps(rect1, rect3) == false);
+        REQUIRE(overlaps(rect1, rect4) == false);  // touching doesn't count as overlap
+    }
+    
+    SECTION("within_bounds function") {
+        Rect bounds{0, 0, 100, 100};
+        Rect inside{10, 10, 80, 80};
+        Rect outside{50, 50, 80, 80};  // exceeds bounds
+        Rect negative{-10, 10, 50, 50}; // negative position
+        
+        REQUIRE(within_bounds(inside, bounds) == true);
+        REQUIRE(within_bounds(outside, bounds) == false);
+        REQUIRE(within_bounds(negative, bounds) == false);
+    }
+}
+
+TEST_CASE("Worst Aspect Ratio Function", "[worst_aspect_ratio]") {
+    auto node1 = std::make_unique<MockTreeNode>(100.0f, "node1");
+    auto node2 = std::make_unique<MockTreeNode>(50.0f, "node2");
+    auto node3 = std::make_unique<MockTreeNode>(25.0f, "node3");
+    
+    std::vector<const MockTreeNode*> row1 = {node1.get()};
+    std::vector<const MockTreeNode*> row2 = {node1.get(), node2.get()};
+    std::vector<const MockTreeNode*> row3 = {node1.get(), node2.get(), node3.get()};
+    
+    SECTION("Single element row") {
+        float ratio = worst_aspect_ratio(row1, 100.0f);
+        REQUIRE(ratio > 0);
+        std::cout << "Single element aspect ratio: " << ratio << std::endl;
+    }
+    
+    SECTION("Two element row") {
+        float ratio = worst_aspect_ratio(row2, 100.0f);
+        REQUIRE(ratio > 0);
+        std::cout << "Two element aspect ratio: " << ratio << std::endl;
+    }
+    
+    SECTION("Three element row") {
+        float ratio = worst_aspect_ratio(row3, 100.0f);
+        REQUIRE(ratio > 0);
+        std::cout << "Three element aspect ratio: " << ratio << std::endl;
+    }
+    
+    SECTION("Empty row") {
+        std::vector<const MockTreeNode*> empty_row;
+        float ratio = worst_aspect_ratio(empty_row, 100.0f);
+        REQUIRE(ratio == std::numeric_limits<float>::max());
+    }
+    
+    SECTION("Zero width") {
+        float ratio = worst_aspect_ratio(row1, 0.0f);
+        REQUIRE(ratio == std::numeric_limits<float>::max());
+    }
+}
+
+TEST_CASE("Layoutrow Function", "[layoutrow]") {
+    auto node1 = std::make_unique<MockTreeNode>(100.0f, "node1");
+    auto node2 = std::make_unique<MockTreeNode>(50.0f, "node2");
+    
+    std::vector<const MockTreeNode*> row = {node1.get(), node2.get()};
+    
+    SECTION("Horizontal rectangle") {
+        Rect available{0, 0, 200, 100};  // wider than tall
+        auto result = layoutrow(row, available);
+        
+        REQUIRE(result.size() == 2);
+        
+        std::cout << "\n=== Layoutrow Test: Horizontal ===\n";
+        for (size_t i = 0; i < result.size(); ++i) {
+            const auto& [node, rect] = result[i];
+            std::cout << "Node " << node->name() << " (size=" << node->size() << "): ";
+            print_rect("", rect);
+        }
+        
+        // Check that rectangles don't overlap
+        REQUIRE_FALSE(overlaps(result[0].second, result[1].second));
+        
+        // Check that both are within bounds
+        REQUIRE(within_bounds(result[0].second, available));
+        REQUIRE(within_bounds(result[1].second, available));
+    }
+    
+    SECTION("Vertical rectangle") {
+        Rect available{0, 0, 100, 200};  // taller than wide
+        auto result = layoutrow(row, available);
+        
+        REQUIRE(result.size() == 2);
+        
+        std::cout << "\n=== Layoutrow Test: Vertical ===\n";
+        for (size_t i = 0; i < result.size(); ++i) {
+            const auto& [node, rect] = result[i];
+            std::cout << "Node " << node->name() << " (size=" << node->size() << "): ";
+            print_rect("", rect);
+        }
+        
+        // Check that rectangles don't overlap
+        REQUIRE_FALSE(overlaps(result[0].second, result[1].second));
+        
+        // Check that both are within bounds
+        REQUIRE(within_bounds(result[0].second, available));
+        REQUIRE(within_bounds(result[1].second, available));
+    }
+    
+    SECTION("Empty row") {
+        std::vector<const MockTreeNode*> empty_row;
+        Rect available{0, 0, 100, 100};
+        auto result = layoutrow(empty_row, available);
+        
+        REQUIRE(result.empty());
+    }
+}
+
+TEST_CASE("Remaining Space After Row", "[remaining_space]") {
+    auto node1 = std::make_unique<MockTreeNode>(100.0f, "node1");
+    auto node2 = std::make_unique<MockTreeNode>(50.0f, "node2");
+    
+    std::vector<const MockTreeNode*> row = {node1.get(), node2.get()};
+    
+    SECTION("Horizontal rectangle") {
+        Rect available{0, 0, 200, 100};  // wider than tall
+        Rect remaining = remaining_space_after_row(row, available);
+        
+        std::cout << "\n=== Remaining Space Test: Horizontal ===\n";
+        print_rect("Original", available);
+        print_rect("Remaining", remaining);
+        
+        // Remaining space should be within original bounds
+        REQUIRE(within_bounds(remaining, available));
+        
+        // Remaining space should have positive dimensions
+        REQUIRE(remaining.width > 0);
+        REQUIRE(remaining.height > 0);
+    }
+    
+    SECTION("Vertical rectangle") {
+        Rect available{0, 0, 100, 200};  // taller than wide
+        Rect remaining = remaining_space_after_row(row, available);
+        
+        std::cout << "\n=== Remaining Space Test: Vertical ===\n";
+        print_rect("Original", available);
+        print_rect("Remaining", remaining);
+        
+        // Remaining space should be within original bounds
+        REQUIRE(within_bounds(remaining, available));
+        
+        // Remaining space should have positive dimensions
+        REQUIRE(remaining.width > 0);
+        REQUIRE(remaining.height > 0);
+    }
+    
+    SECTION("Empty row") {
+        std::vector<const MockTreeNode*> empty_row;
+        Rect available{0, 0, 100, 100};
+        Rect remaining = remaining_space_after_row(empty_row, available);
+        
+        // Should return unchanged rectangle
+        REQUIRE(remaining.x == available.x);
+        REQUIRE(remaining.y == available.y);
+        REQUIRE(remaining.width == available.width);
+        REQUIRE(remaining.height == available.height);
+    }
+}
+
+TEST_CASE("Squarify Function", "[squarify]") {
+    SECTION("Two elements") {
+        auto node1 = std::make_unique<MockTreeNode>(100.0f, "large");
+        auto node2 = std::make_unique<MockTreeNode>(50.0f, "small");
+        
+        std::vector<const MockTreeNode*> children = {node1.get(), node2.get()};
+        Rect available{0, 0, 200, 100};
+        
+        auto result = squarify(children, available);
+        
+        std::cout << "\n=== Squarify Test: Two Elements ===\n";
+        print_rect("Available", available);
+        for (size_t i = 0; i < result.size(); ++i) {
+            const auto& [node, rect] = result[i];
+            std::cout << "Node " << node->name() << " (size=" << node->size() << "): ";
+            print_rect("", rect);
+        }
+        
+        REQUIRE(result.size() == 2);
+        
+        // Check no overlaps
+        REQUIRE_FALSE(overlaps(result[0].second, result[1].second));
+        
+        // Check within bounds
+        REQUIRE(within_bounds(result[0].second, available));
+        REQUIRE(within_bounds(result[1].second, available));
+    }
+    
+    SECTION("Three elements") {
+        auto node1 = std::make_unique<MockTreeNode>(100.0f, "large");
+        auto node2 = std::make_unique<MockTreeNode>(50.0f, "medium");
+        auto node3 = std::make_unique<MockTreeNode>(25.0f, "small");
+        
+        std::vector<const MockTreeNode*> children = {node1.get(), node2.get(), node3.get()};
+        Rect available{0, 0, 300, 200};
+        
+        auto result = squarify(children, available);
+        
+        std::cout << "\n=== Squarify Test: Three Elements ===\n";
+        print_rect("Available", available);
+        for (size_t i = 0; i < result.size(); ++i) {
+            const auto& [node, rect] = result[i];
+            std::cout << "Node " << node->name() << " (size=" << node->size() << "): ";
+            print_rect("", rect);
+        }
+        
+        REQUIRE(result.size() == 3);
+        
+        // Check no overlaps between any pair
+        for (size_t i = 0; i < result.size(); ++i) {
+            for (size_t j = i + 1; j < result.size(); ++j) {
+                REQUIRE_FALSE(overlaps(result[i].second, result[j].second));
+            }
+        }
+        
+        // Check within bounds
+        for (const auto& [node, rect] : result) {
+            REQUIRE(within_bounds(rect, available));
+        }
+    }
+    
+    SECTION("Empty input") {
+        std::vector<const MockTreeNode*> empty_children;
+        Rect available{0, 0, 100, 100};
+        
+        auto result = squarify(empty_children, available);
+        REQUIRE(result.empty());
+    }
+}
