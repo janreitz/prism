@@ -130,6 +130,32 @@ void validate_layout(const std::vector<RenderedRect<T>> &layout,
 // Main entry point for calculating layout - handles tree traversal and
 // flattening
 template <TreeNode T>
+std::vector<RenderedRect<T>> layout(const T &root, const Rect &available_rect)
+{
+    float total_size = static_cast<float>(root.size());
+    float available_size = available_rect.height * available_rect.width;
+    float scaling_factor = std::sqrt(total_size / available_size);
+
+    Rect available_rect_scaled{
+        .x = available_rect.x,
+        .y = available_rect.y,
+        .width = available_rect.width * scaling_factor,
+        .height = available_rect.height * scaling_factor,
+    };
+
+    assert(available_rect_scaled.height * available_rect_scaled.width ==
+           total_size);
+
+    auto layout_result = calculate_layout(root, available_rect_scaled);
+    for (auto &rect : layout_result) {
+        rect.rect.height /= scaling_factor;
+        rect.rect.width /= scaling_factor;
+    }
+
+    return layout_result;
+}
+
+template <TreeNode T>
 std::vector<RenderedRect<T>> calculate_layout(const T &root,
                                               const Rect &available_rect)
 {
@@ -204,6 +230,7 @@ template <TreeNode T>
 std::vector<std::pair<const T *, Rect>>
 squarify(const std::vector<const T *> &children, const Rect &available_rect)
 {
+    // TODO refactor/fix
     std::vector<std::pair<const T *, Rect>> results;
 
     if (children.empty()) {

@@ -92,7 +92,7 @@ bool TreeMapWidget<T>::render(const char *label, const ImVec2 &size)
 
     // Calculate layout and get rendered rectangles directly
     treemap::Rect available_rect{0, 0, canvas_size.x, canvas_size.y};
-    rendered_rects_ = treemap::calculate_layout(root_.get(), available_rect);
+    rendered_rects_ = treemap::layout(root_.get(), available_rect);
 
     ImGui::InvisibleButton("treemap_canvas", canvas_size);
 
