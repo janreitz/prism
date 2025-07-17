@@ -117,21 +117,16 @@ template <TreeNode T>
 void validate_layout(const std::vector<RenderedRect<T>> &layout,
                      const Rect &available_rect)
 {
-    // Assert rectangles are non-overlapping and within bounds
-    auto rect_view =
-        layout | std::views::transform([](const auto &rr) { return rr.rect_; });
-    auto combination_view = std::views::cartesian_product(rect_view, rect_view);
-
-    // Check no overlaps
-    assert(std::ranges::none_of(combination_view, [](const auto &pair) {
-        const auto &[rect1, rect2] = pair;
-        return &rect1 != &rect2 && overlaps(rect1, rect2);
-    }));
-
-    // Check all rectangles are within bounds
-    assert(std::ranges::all_of(rect_view, [&](const Rect &rect) {
-        return within_bounds(rect, available_rect);
-    }));
+    for (size_t i = 0; i < layout.size(); i++) {
+        const auto &rect_i = layout[i].rect_;
+        assert(within_bounds(rect_i, available_rect));
+        for (size_t j = 0; j < layout.size(); j++) {
+            if (i == j)
+                continue;
+            const auto &rect_j = layout[j].rect_;
+            assert(!overlaps(rect_i, rect_j));
+        }
+    }
 }
 
 /// @brief  Main entry point for calculating treemap layout - handles scaling
