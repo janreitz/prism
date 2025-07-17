@@ -136,21 +136,32 @@ std::vector<RenderedRect<T>> layout(const T &root, const Rect &available_rect)
 {
     // Remove x/y offset and scale width and height, so the area is equal to the
     // total sum of elements to be placed
-    float total_size = static_cast<float>(root.size());
-    float available_size = available_rect.height * available_rect.width;
-    float scaling_factor = std::sqrt(total_size / available_size);
+    const double total_size = static_cast<double>(root.size());
+    const double available_size =
+        static_cast<double>(available_rect.height * available_rect.width);
+    const double scaling_factor = std::sqrt(total_size / available_size);
 
     Rect available_rect_scaled{
         .x = 0,
         .y = 0,
-        .width = available_rect.width * scaling_factor,
-        .height = available_rect.height * scaling_factor,
+        .width = static_cast<float>(available_rect.width * scaling_factor),
+        .height = static_cast<float>(available_rect.height * scaling_factor),
     };
 
-    assert(available_rect_scaled.height * available_rect_scaled.width ==
-           total_size);
+    const float calculated_area =
+        available_rect_scaled.height * available_rect_scaled.width;
+    const float error = std::abs(calculated_area - total_size);
+    if (error >= 1.0f) {
+        std::cerr << "Area calculation error: " << error
+                  << " (calculated: " << calculated_area
+                  << ", expected: " << total_size << ")" << std::endl;
+        std::cerr << "Scaling factor: " << scaling_factor << std::endl;
+        std::cerr << "Available rect: " << available_rect.width << "x"
+                  << available_rect.height << std::endl;
+    }
+    assert(error < 1.0f);
 
-    auto layout_result = calculate_layout(root, available_rect_scaled);
+    auto layout_result = layout_tree_traversal(root, available_rect_scaled);
 
     // Rescale layout result to screen coordinates and reapply initial screen
     // space offset
@@ -168,8 +179,8 @@ std::vector<RenderedRect<T>> layout(const T &root, const Rect &available_rect)
 }
 
 template <TreeNode T>
-std::vector<RenderedRect<T>> calculate_layout(const T &root,
-                                              const Rect &available_rect)
+std::vector<RenderedRect<T>> layout_tree_traversal(const T &root,
+                                                   const Rect &available_rect)
 {
     auto children = root.children();
     if (children.empty()) {
@@ -193,14 +204,21 @@ std::vector<RenderedRect<T>> calculate_layout(const T &root,
     // Recursively calculate layout for each child and flatten results
     std::vector<RenderedRect<T>> result;
     for (const auto &[child_node, child_rect] : child_layouts) {
-        auto child_rects = calculate_layout(*child_node, child_rect);
+        auto child_rects = layout_tree_traversal(*child_node, child_rect);
         result.insert(result.end(), child_rects.begin(), child_rects.end());
     }
 
     return result;
 }
 
-// Calculate remaining space after laying out a row (was layout_row)
+template <typename T> float row_area(const std::vector<const T *> &row)
+{
+    return std::accumulate(row.cbegin(), row.cend(), 0.0F,
+                           [](float total_area, const T *node) {
+                               return total_area + node->size();
+                           });
+}
+
 template <TreeNode T>
 Rect remaining_space_after_row(const std::vector<const T *> &row,
                                const Rect &available_rect)
@@ -209,19 +227,10 @@ Rect remaining_space_after_row(const std::vector<const T *> &row,
         return available_rect;
     }
 
-    float total_area = 0;
-    for (const T *node : row) {
-        total_area += node->size();
-    }
-
-    if (total_area <= 0) {
-        return available_rect;
-    }
-
     // Determine row orientation based on available space
     bool horizontal = is_horizontal(available_rect);
     float row_width = width(available_rect);
-    float row_height = total_area / row_width;
+    float row_height = row_area(row) / row_width;
 
     // Calculate remaining space after placing this row
     Rect remaining_rect = available_rect;
@@ -304,10 +313,7 @@ std::vector<RenderedRect<T>> layoutrow(const std::vector<const T *> &row,
     std::vector<RenderedRect<T>> results;
     results.reserve(row.size());
 
-    float total_area = std::accumulate(row.cbegin(), row.cend(), 0.0F,
-                                       [](float total_area, const T *node) {
-                                           return total_area + node->size();
-                                       });
+    float total_area = row_area(row);
 
     // Determine row orientation based on available space
     bool horizontal = is_horizontal(available_rect);
