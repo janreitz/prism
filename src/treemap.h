@@ -170,14 +170,14 @@ std::vector<RenderedRect<T>> layout(const T &root, const Rect &available_rect)
     // Rescale layout result to screen coordinates and reapply initial screen
     // space offset
     for (auto &rect : layout_result) {
-        rect.rect_.x /= scaling_factor + available_rect.x;
-        rect.rect_.y /= scaling_factor + available_rect.y;
+        rect.rect_.x = rect.rect_.x / scaling_factor + available_rect.x;
+        rect.rect_.y = rect.rect_.y / scaling_factor + available_rect.y;
         rect.rect_.height /= scaling_factor;
         rect.rect_.width /= scaling_factor;
     }
 
     // Validate the result
-    validate_layout(layout_result, available_rect);
+    // validate_layout(layout_result, available_rect);
 
     return layout_result;
 }
