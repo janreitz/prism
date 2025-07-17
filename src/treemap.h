@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <execution>
 #include <functional>
 #include <iostream>
 #include <limits>
@@ -211,14 +212,27 @@ std::vector<RenderedRect<T>> layout_tree_traversal(const T &root,
 
     auto child_layouts = squarify(const_children, available_rect);
 
-    // Recursively calculate layout for each child and flatten results
+#if ENABLE_PARALLEL_EXECUTION
+    // Parallel version
+    return std::transform_reduce(
+        std::execution::par, child_layouts.begin(), child_layouts.end(),
+        std::vector<RenderedRect<T>>{},
+        [](std::vector<RenderedRect<T>> a, std::vector<RenderedRect<T>> b) {
+            a.insert(a.end(), b.begin(), b.end());
+            return a;
+        },
+        [](const auto &layout) {
+            return layout_tree_traversal(*layout.node_, layout.rect_);
+        });
+#else
+    // Sequential version
     std::vector<RenderedRect<T>> result;
-    for (const auto &[child_node, child_rect] : child_layouts) {
-        auto child_rects = layout_tree_traversal(*child_node, child_rect);
+    for (const auto &layout : child_layouts) {
+        auto child_rects = layout_tree_traversal(*layout.node_, layout.rect_);
         result.insert(result.end(), child_rects.begin(), child_rects.end());
     }
-
     return result;
+#endif
 }
 
 template <typename T> float row_area(const std::vector<const T *> &row)

@@ -59,6 +59,15 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(imgui)
 
 find_package(OpenGL REQUIRED)
+find_package(TBB QUIET)
+
+if(TBB_FOUND)
+    message(STATUS "TBB found - enabling parallel execution")
+    set(ENABLE_PARALLEL_EXECUTION ON)
+else()
+    message(STATUS "TBB not found - parallel execution disabled")
+    set(ENABLE_PARALLEL_EXECUTION OFF)
+endif()
 
 # Include directories
 include_directories(
@@ -114,11 +123,20 @@ target_link_libraries(layout_tests
         Catch2::Catch2WithMain
 )
 
-# Link Tracy if enabled
-if(ENABLE_TRACY)
-    target_link_libraries(prism PUBLIC Tracy::TracyClient)
-    target_link_libraries(layout_tests PUBLIC Tracy::TracyClient)
-endif()
+foreach(target prism layout_tests)
+    target_compile_features(${target} PRIVATE cxx_std_23)
+
+    if(ENABLE_TRACY)
+        target_link_libraries(${target} PUBLIC Tracy::TracyClient)
+    endif()
+
+    if(ENABLE_PARALLEL_EXECUTION)
+        target_compile_definitions(${target} PRIVATE ENABLE_PARALLEL_EXECUTION=1)
+        target_link_libraries(${target} PRIVATE TBB::tbb)
+    else()
+        target_compile_definitions(${target} PRIVATE ENABLE_PARALLEL_EXECUTION=0)
+    endif()
+endforeach()
 
 # Register test with CTest
 include(CTest)
