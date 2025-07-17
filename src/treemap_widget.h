@@ -115,10 +115,10 @@ bool TreeMapWidget<T>::render(const char *label, const ImVec2 &size)
 
         ImU32 fill_color = IM_COL32(100, 150, 200, 255); // Default color
         if (coloring_strategy_) {
-            fill_color = (*coloring_strategy_)(*rect.node);
+            fill_color = (*coloring_strategy_)(*rect.node_);
         }
 
-        if (rect.node == hovered_node_) {
+        if (rect.node_ == hovered_node_) {
             float r = ((fill_color >> 0) & 0xFF) / 255.0f;
             float g = ((fill_color >> 8) & 0xFF) / 255.0f;
             float b = ((fill_color >> 16) & 0xFF) / 255.0f;
@@ -133,12 +133,12 @@ bool TreeMapWidget<T>::render(const char *label, const ImVec2 &size)
                          static_cast<int>(b * 255), static_cast<int>(a * 255));
         }
 
-        ImVec2 screen_min(canvas_pos.x + rect.rect.x,
-                          canvas_pos.y + rect.rect.y);
-        ImVec2 screen_max(screen_min.x + rect.rect.width,
-                          screen_min.y + rect.rect.height);
+        ImVec2 screen_min(canvas_pos.x + rect.rect_.x,
+                          canvas_pos.y + rect.rect_.y);
+        ImVec2 screen_max(screen_min.x + rect.rect_.width,
+                          screen_min.y + rect.rect_.height);
 
-        if (rect.node == selected_node_) {
+        if (rect.node_ == selected_node_) {
             draw_list->AddRectFilled(screen_min, screen_max,
                                      IM_COL32(255, 255, 0, 100));
         }

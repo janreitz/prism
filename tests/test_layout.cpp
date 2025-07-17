@@ -48,8 +48,8 @@ void print_rendered_rects(const std::vector<RenderedRect<MockTreeNode>> &rects)
 {
     std::cout << "\n=== Rendered Rectangles ===\n";
     for (size_t i = 0; i < rects.size(); ++i) {
-        std::cout << "Rect " << i << " ('" << rects[i].node->name() << "'): ";
-        print_rect("", rects[i].rect);
+        std::cout << "Rect " << i << " ('" << rects[i].node_->name() << "'): ";
+        print_rect("", rects[i].rect_);
     }
     std::cout << "========================\n\n";
 }
@@ -63,14 +63,14 @@ bool check_overlaps_detailed(
 
     for (size_t i = 0; i < rects.size(); ++i) {
         for (size_t j = i + 1; j < rects.size(); ++j) {
-            if (overlaps(rects[i].rect, rects[j].rect)) {
+            if (overlaps(rects[i].rect_, rects[j].rect_)) {
                 std::cout << "OVERLAP FOUND!\n";
-                std::cout << "  Rect " << i << " ('" << rects[i].node->name()
+                std::cout << "  Rect " << i << " ('" << rects[i].node_->name()
                           << "'): ";
-                print_rect("", rects[i].rect);
-                std::cout << "  Rect " << j << " ('" << rects[j].node->name()
+                print_rect("", rects[i].rect_);
+                std::cout << "  Rect " << j << " ('" << rects[j].node_->name()
                           << "'): ";
-                print_rect("", rects[j].rect);
+                print_rect("", rects[j].rect_);
                 found_overlap = true;
             }
         }
@@ -94,11 +94,11 @@ bool check_bounds_detailed(const std::vector<RenderedRect<MockTreeNode>> &rects,
     bool found_out_of_bounds = false;
 
     for (size_t i = 0; i < rects.size(); ++i) {
-        if (!within_bounds(rects[i].rect, bounds)) {
+        if (!within_bounds(rects[i].rect_, bounds)) {
             std::cout << "OUT OF BOUNDS!\n";
-            std::cout << "  Rect " << i << " ('" << rects[i].node->name()
+            std::cout << "  Rect " << i << " ('" << rects[i].node_->name()
                       << "'): ";
-            print_rect("", rects[i].rect);
+            print_rect("", rects[i].rect_);
             found_out_of_bounds = true;
         }
     }
@@ -229,10 +229,10 @@ TEST_CASE("TreeMap Layout - Single Child", "[layout]")
     REQUIRE(result.size() == 1);
 
     // Should fill the entire available space
-    REQUIRE(result[0].rect.x == 0);
-    REQUIRE(result[0].rect.y == 0);
-    REQUIRE(result[0].rect.width == 100);
-    REQUIRE(result[0].rect.height == 100);
+    REQUIRE(result[0].rect_.x == 0);
+    REQUIRE(result[0].rect_.y == 0);
+    REQUIRE(result[0].rect_.width == 100);
+    REQUIRE(result[0].rect_.height == 100);
 }
 
 TEST_CASE("TreeMap Layout - Leaf Node", "[layout]")
@@ -258,10 +258,10 @@ TEST_CASE("TreeMap Layout - Leaf Node", "[layout]")
 
     // Should have 1 rectangle matching the available rect
     REQUIRE(result.size() == 1);
-    REQUIRE(result[0].rect.x == 10);
-    REQUIRE(result[0].rect.y == 20);
-    REQUIRE(result[0].rect.width == 80);
-    REQUIRE(result[0].rect.height == 60);
+    REQUIRE(result[0].rect_.x == 10);
+    REQUIRE(result[0].rect_.y == 20);
+    REQUIRE(result[0].rect_.width == 80);
+    REQUIRE(result[0].rect_.height == 60);
 }
 
 // ========================================
@@ -389,11 +389,11 @@ TEST_CASE("Layoutrow Function", "[layoutrow]")
         }
 
         // Check that rectangles don't overlap
-        REQUIRE_FALSE(overlaps(result[0].second, result[1].second));
+        REQUIRE_FALSE(overlaps(result[0].rect_, result[1].rect_));
 
         // Check that both are within bounds
-        REQUIRE(within_bounds(result[0].second, available));
-        REQUIRE(within_bounds(result[1].second, available));
+        REQUIRE(within_bounds(result[0].rect_, available));
+        REQUIRE(within_bounds(result[1].rect_, available));
     }
 
     SECTION("Vertical rectangle")
@@ -412,11 +412,11 @@ TEST_CASE("Layoutrow Function", "[layoutrow]")
         }
 
         // Check that rectangles don't overlap
-        REQUIRE_FALSE(overlaps(result[0].second, result[1].second));
+        REQUIRE_FALSE(overlaps(result[0].rect_, result[1].rect_));
 
         // Check that both are within bounds
-        REQUIRE(within_bounds(result[0].second, available));
-        REQUIRE(within_bounds(result[1].second, available));
+        REQUIRE(within_bounds(result[0].rect_, available));
+        REQUIRE(within_bounds(result[1].rect_, available));
     }
 
     SECTION("Empty row")
@@ -508,11 +508,11 @@ TEST_CASE("Squarify Function", "[squarify]")
         REQUIRE(result.size() == 2);
 
         // Check no overlaps
-        REQUIRE_FALSE(overlaps(result[0].second, result[1].second));
+        REQUIRE_FALSE(overlaps(result[0].rect_, result[1].rect_));
 
         // Check within bounds
-        REQUIRE(within_bounds(result[0].second, available));
-        REQUIRE(within_bounds(result[1].second, available));
+        REQUIRE(within_bounds(result[0].rect_, available));
+        REQUIRE(within_bounds(result[1].rect_, available));
     }
 
     SECTION("Three elements")
@@ -541,7 +541,7 @@ TEST_CASE("Squarify Function", "[squarify]")
         // Check no overlaps between any pair
         for (size_t i = 0; i < result.size(); ++i) {
             for (size_t j = i + 1; j < result.size(); ++j) {
-                REQUIRE_FALSE(overlaps(result[i].second, result[j].second));
+                REQUIRE_FALSE(overlaps(result[i].rect_, result[j].rect_));
             }
         }
 
@@ -602,9 +602,9 @@ TEST_CASE("Tree Traversal Coordinate Bug", "[tree_traversal]")
 
         std::cout << "\nFull tree layout result:\n";
         for (size_t i = 0; i < result.size(); ++i) {
-            std::cout << "  Rect " << i << " ('" << result[i].node->name()
+            std::cout << "  Rect " << i << " ('" << result[i].node_->name()
                       << "'): ";
-            print_rect("", result[i].rect);
+            print_rect("", result[i].rect_);
         }
 
         // The bug: child rectangles should be positioned within their parent's
@@ -625,16 +625,16 @@ TEST_CASE("Tree Traversal Coordinate Bug", "[tree_traversal]")
 
         // All of dir2's children should be within dir2's space
         for (const auto &rendered : result) {
-            if (rendered.node->name().find("dir2_") == 0) {
-                std::cout << "Checking if " << rendered.node->name()
+            if (rendered.node_->name().find("dir2_") == 0) {
+                std::cout << "Checking if " << rendered.node_->name()
                           << " is within dir2's space:\n";
                 std::cout << "  Child rect: ";
-                print_rect("", rendered.rect);
+                print_rect("", rendered.rect_);
                 std::cout << "  Within parent space: "
-                          << within_bounds(rendered.rect, dir2_space) << "\n";
+                          << within_bounds(rendered.rect_, dir2_space) << "\n";
 
                 // This should pass but probably fails due to coordinate bug
-                REQUIRE(within_bounds(rendered.rect, dir2_space));
+                REQUIRE(within_bounds(rendered.rect_, dir2_space));
             }
         }
     }

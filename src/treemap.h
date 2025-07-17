@@ -4,6 +4,7 @@
 #include <functional>
 #include <iostream>
 #include <limits>
+#include <numeric>
 #include <optional>
 #include <ranges>
 #include <string>
@@ -46,13 +47,10 @@ bool within_bounds(const Rect &rect, const Rect &bounds)
 }
 
 template <TreeNode T> struct RenderedRect {
-    const T *node;
-    Rect rect;
+    const T *node_;
+    Rect rect_;
 
-    RenderedRect(const T *n, float x_, float y_, float w_, float h_)
-        : node(n), rect(Rect{.x = x_, .y = y_, .width = w_, .height = h_})
-    {
-    }
+    RenderedRect(const T *n, Rect rect) : node_(n), rect_(rect) {}
 };
 
 template <TreeNode T>
@@ -62,10 +60,10 @@ auto hit_test(ImVec2 test, const std::vector<RenderedRect<T>> &rects,
     auto hovered_rect_it =
         std::find_if(rects.cbegin(), rects.cend(),
                      [&offset, &test](const RenderedRect<T> &rect) -> bool {
-                         const ImVec2 rect_min(offset.x + rect.rect.x,
-                                               offset.y + rect.rect.y);
-                         const ImVec2 rect_max(rect_min.x + rect.rect.width,
-                                               rect_min.y + rect.rect.height);
+                         const ImVec2 rect_min(offset.x + rect.rect_.x,
+                                               offset.y + rect.rect_.y);
+                         const ImVec2 rect_max(rect_min.x + rect.rect_.width,
+                                               rect_min.y + rect.rect_.height);
                          return test.x >= rect_min.x && test.x <= rect_max.x &&
                                 test.y >= rect_min.y && test.y <= rect_max.y;
                      });
@@ -73,7 +71,7 @@ auto hit_test(ImVec2 test, const std::vector<RenderedRect<T>> &rects,
     if (hovered_rect_it == rects.cend()) {
         return nullptr;
     } else {
-        return hovered_rect_it->node;
+        return hovered_rect_it->node_;
     }
 };
 
@@ -112,7 +110,7 @@ void validate_layout(const std::vector<RenderedRect<T>> &layout,
 {
     // Assert rectangles are non-overlapping and within bounds
     auto rect_view =
-        layout | std::views::transform([](const auto &rr) { return rr.rect; });
+        layout | std::views::transform([](const auto &rr) { return rr.rect_; });
     auto combination_view = std::views::cartesian_product(rect_view, rect_view);
 
     // Check no overlaps
@@ -127,18 +125,24 @@ void validate_layout(const std::vector<RenderedRect<T>> &layout,
     }));
 }
 
-// Main entry point for calculating layout - handles tree traversal and
-// flattening
+/// @brief  Main entry point for calculating treemap layout - handles scaling
+/// relative scaling of screen coordinates/space and size of elements to place
+/// @tparam T
+/// @param root
+/// @param available_rect
+/// @return
 template <TreeNode T>
 std::vector<RenderedRect<T>> layout(const T &root, const Rect &available_rect)
 {
+    // Remove x/y offset and scale width and height, so the area is equal to the
+    // total sum of elements to be placed
     float total_size = static_cast<float>(root.size());
     float available_size = available_rect.height * available_rect.width;
     float scaling_factor = std::sqrt(total_size / available_size);
 
     Rect available_rect_scaled{
-        .x = available_rect.x,
-        .y = available_rect.y,
+        .x = 0,
+        .y = 0,
         .width = available_rect.width * scaling_factor,
         .height = available_rect.height * scaling_factor,
     };
@@ -147,10 +151,18 @@ std::vector<RenderedRect<T>> layout(const T &root, const Rect &available_rect)
            total_size);
 
     auto layout_result = calculate_layout(root, available_rect_scaled);
+
+    // Rescale layout result to screen coordinates and reapply initial screen
+    // space offset
     for (auto &rect : layout_result) {
-        rect.rect.height /= scaling_factor;
-        rect.rect.width /= scaling_factor;
+        rect.rect_.x /= scaling_factor + available_rect.x;
+        rect.rect_.y /= scaling_factor + available_rect.y;
+        rect.rect_.height /= scaling_factor;
+        rect.rect_.width /= scaling_factor;
     }
+
+    // Validate the result
+    validate_layout(layout_result, available_rect);
 
     return layout_result;
 }
@@ -162,19 +174,21 @@ std::vector<RenderedRect<T>> calculate_layout(const T &root,
     auto children = root.children();
     if (children.empty()) {
         // Leaf node - return single rectangle
-        return {RenderedRect<T>(&root, available_rect.x, available_rect.y,
-                                available_rect.width, available_rect.height)};
+        return {RenderedRect<T>(&root, Rect{.x = available_rect.x,
+                                            .y = available_rect.y,
+                                            .width = available_rect.width,
+                                            .height = available_rect.height})};
     }
 
     // Convert to const pointers and sort by decreasing size
-    std::vector<const T *> sorted_children;
-    for (T *child : children) {
-        sorted_children.push_back(child);
-    }
-    std::sort(sorted_children.begin(), sorted_children.end(),
-              [](const T *a, const T *b) { return a->size() > b->size(); });
+    // TODO refactor to remove this step
 
-    auto child_layouts = squarify(sorted_children, available_rect);
+    std::vector<const T *> const_children;
+    for (const T *child : children) {
+        const_children.push_back(child);
+    }
+
+    auto child_layouts = squarify(const_children, available_rect);
 
     // Recursively calculate layout for each child and flatten results
     std::vector<RenderedRect<T>> result;
@@ -182,9 +196,6 @@ std::vector<RenderedRect<T>> calculate_layout(const T &root,
         auto child_rects = calculate_layout(*child_node, child_rect);
         result.insert(result.end(), child_rects.begin(), child_rects.end());
     }
-
-    // Validate the result
-    validate_layout(result, available_rect);
 
     return result;
 }
@@ -227,15 +238,18 @@ Rect remaining_space_after_row(const std::vector<const T *> &row,
 
 // Core squarify algorithm - iterative implementation for single-level layout
 template <TreeNode T>
-std::vector<std::pair<const T *, Rect>>
-squarify(const std::vector<const T *> &children, const Rect &available_rect)
+std::vector<RenderedRect<T>> squarify(std::vector<const T *> children,
+                                      const Rect &available_rect)
 {
-    // TODO refactor/fix
-    std::vector<std::pair<const T *, Rect>> results;
-
     if (children.empty()) {
-        return results;
+        return {};
     }
+
+    std::sort(children.begin(), children.end(),
+              [](const T *a, const T *b) { return a->size() > b->size(); });
+
+    // TODO refactor/fix
+    std::vector<RenderedRect<T>> results;
 
     std::vector<const T *> remaining_children = children;
     std::vector<const T *> current_row;
@@ -276,24 +290,24 @@ squarify(const std::vector<const T *> &children, const Rect &available_rect)
     return results;
 }
 
+/// @brief Layout one row in the available rectangle
+/// @tparam T
+/// @param row Nodes to layout
+/// @param available_rect coordinates and available space
+/// @return
 template <TreeNode T>
-std::vector<std::pair<const T *, Rect>>
-layoutrow(const std::vector<const T *> &row, const Rect &available_rect)
+std::vector<RenderedRect<T>> layoutrow(const std::vector<const T *> &row,
+                                       const Rect &available_rect)
 {
-    std::vector<std::pair<const T *, Rect>> results;
+    assert(!row.empty() && "Layout row should not be called with empty row");
 
-    if (row.empty()) {
-        return results;
-    }
+    std::vector<RenderedRect<T>> results;
+    results.reserve(row.size());
 
-    float total_area = 0;
-    for (const T *node : row) {
-        total_area += node->size();
-    }
-
-    if (total_area <= 0) {
-        return results;
-    }
+    float total_area = std::accumulate(row.cbegin(), row.cend(), 0.0F,
+                                       [](float total_area, const T *node) {
+                                           return total_area + node->size();
+                                       });
 
     // Determine row orientation based on available space
     bool horizontal = is_horizontal(available_rect);
