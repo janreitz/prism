@@ -6,6 +6,7 @@
 #include <limits>
 #include <numeric>
 #include <optional>
+#include <queue>
 #include <ranges>
 #include <string>
 #include <vector>
@@ -230,7 +231,7 @@ template <typename T> float row_area(const std::vector<const T *> &row)
 
 // Core squarify algorithm - iterative implementation for single-level layout
 template <TreeNode T>
-std::vector<RenderedRect<T>> squarify(std::vector<const T *> children,
+std::vector<RenderedRect<T>> squarify(const std::vector<const T *> &children,
                                       const Rect &available_rect)
 {
     ZoneScoped;
@@ -238,22 +239,24 @@ std::vector<RenderedRect<T>> squarify(std::vector<const T *> children,
         return {};
     }
 
-    std::sort(children.begin(), children.end(),
-              [](const T *a, const T *b) { return a->size() > b->size(); });
+    auto cmp = [](const T *left, const T *right) {
+        return left->size() < right->size();
+    };
+    std::priority_queue<const T *, std::vector<const T *>, decltype(cmp)>
+        remaining_children(children.begin(), children.end(), cmp);
 
-    // TODO refactor/fix
     std::vector<RenderedRect<T>> results;
+    results.reserve(children.size());
 
-    std::vector<const T *> remaining_children = children;
     std::vector<const T *> current_row;
     Rect current_rect = available_rect;
 
     while (!remaining_children.empty()) {
-        const T *next_child = remaining_children[0];
-        remaining_children.erase(remaining_children.begin());
+        const T *largest_remaining = remaining_children.top();
+        remaining_children.pop();
 
         std::vector<const T *> test_row = current_row;
-        test_row.push_back(next_child);
+        test_row.push_back(largest_remaining);
 
         float w = shorter_side(current_rect);
         float current_worst = worst_aspect_ratio(current_row, w);
@@ -261,7 +264,7 @@ std::vector<RenderedRect<T>> squarify(std::vector<const T *> children,
 
         if (current_row.empty() || test_worst <= current_worst) {
             // Add to current row - aspect ratio improves or stays same
-            current_row.push_back(next_child);
+            current_row.push_back(largest_remaining);
         } else {
             // Flush current row and start new one - aspect ratio would worsen
             auto [row_results, remaining_space] =
@@ -270,7 +273,7 @@ std::vector<RenderedRect<T>> squarify(std::vector<const T *> children,
                            row_results.end());
 
             current_rect = remaining_space;
-            current_row = {next_child};
+            current_row = {largest_remaining};
         }
     }
 
