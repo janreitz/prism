@@ -37,19 +37,12 @@ if (ENABLE_TRACY)
     FetchContent_Declare(
         tracy
         GIT_REPOSITORY https://github.com/wolfpld/tracy.git
-        GIT_TAG        v0.11.1
+        GIT_TAG        master
     )
     FetchContent_MakeAvailable(tracy)
     message(STATUS "MAIN: defining TRACY_ENABLE")
     add_definitions(-DTRACY_ENABLE)
 endif()
-
-FetchContent_Declare(
-    spdlog
-    GIT_REPOSITORY https://github.com/gabime/spdlog.git
-    GIT_TAG         v1.14.1
-)
-FetchContent_MakeAvailable(spdlog)
 
 FetchContent_Declare(
     Catch2
@@ -105,7 +98,6 @@ target_link_libraries(prism
         glad
         glfw
         OpenGL::GL
-        spdlog::spdlog
 )
 
 # Enable testing
@@ -120,8 +112,13 @@ add_executable(layout_tests
 target_link_libraries(layout_tests
     PRIVATE
         Catch2::Catch2WithMain
-        spdlog::spdlog
 )
+
+# Link Tracy if enabled
+if(ENABLE_TRACY)
+    target_link_libraries(prism PUBLIC Tracy::TracyClient)
+    target_link_libraries(layout_tests PUBLIC Tracy::TracyClient)
+endif()
 
 # Register test with CTest
 include(CTest)

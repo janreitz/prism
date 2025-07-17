@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "treemap.h"
+#include <tracy/Tracy.hpp>
 
 template <treemap::TreeNode T> class TreeMapWidget
 {
@@ -84,6 +85,7 @@ const T &TreeMapWidget<T>::get_selected_node() const
 template <treemap::TreeNode T>
 bool TreeMapWidget<T>::render(const char *label, const ImVec2 &size)
 {
+    ZoneScoped;
     ImGui::BeginChild(label, size, true, ImGuiWindowFlags_NoScrollbar);
 
     ImVec2 canvas_pos = ImGui::GetCursorScreenPos();

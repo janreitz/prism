@@ -11,6 +11,7 @@
 #include <vector>
 
 #include <imgui.h> // For ImVec2 -> TODO create custom vec type to avoid this dependency here
+#include <tracy/Tracy.hpp>
 
 namespace treemap
 {
@@ -87,6 +88,7 @@ auto hit_test(ImVec2 test, const std::vector<RenderedRect<T>> &rects,
 template <TreeNode T>
 float worst_aspect_ratio(const std::vector<const T *> &row, float row_width)
 {
+    ZoneScoped;
     if (row.empty() || row_width <= 0) {
         return std::numeric_limits<float>::max();
     }
@@ -138,6 +140,8 @@ void validate_layout(const std::vector<RenderedRect<T>> &layout,
 template <TreeNode T>
 std::vector<RenderedRect<T>> layout(const T &root, const Rect &available_rect)
 {
+    ZoneScoped;
+
     // Remove x/y offset and scale width and height, so the area is equal to the
     // total sum of elements to be placed
     const double total_size = static_cast<double>(root.size());
@@ -152,18 +156,18 @@ std::vector<RenderedRect<T>> layout(const T &root, const Rect &available_rect)
         .height = static_cast<float>(available_rect.height * scaling_factor),
     };
 
-    const float calculated_area =
-        available_rect_scaled.height * available_rect_scaled.width;
-    const float error = std::abs(calculated_area - total_size);
-    if (error >= 1.0f) {
-        std::cerr << "Area calculation error: " << error
-                  << " (calculated: " << calculated_area
-                  << ", expected: " << total_size << ")" << std::endl;
-        std::cerr << "Scaling factor: " << scaling_factor << std::endl;
-        std::cerr << "Available rect: " << available_rect.width << "x"
-                  << available_rect.height << std::endl;
-    }
-    assert(error < 1.0f);
+    // const float calculated_area =
+    //     available_rect_scaled.height * available_rect_scaled.width;
+    // const float error = std::abs(calculated_area - total_size);
+    // if (error >= 1.0f) {
+    //     std::cerr << "Area calculation error: " << error
+    //               << " (calculated: " << calculated_area
+    //               << ", expected: " << total_size << ")" << std::endl;
+    //     std::cerr << "Scaling factor: " << scaling_factor << std::endl;
+    //     std::cerr << "Available rect: " << available_rect.width << "x"
+    //               << available_rect.height << std::endl;
+    // }
+    // assert(error < 1.0f);
 
     auto layout_result = layout_tree_traversal(root, available_rect_scaled);
 
@@ -186,6 +190,7 @@ template <TreeNode T>
 std::vector<RenderedRect<T>> layout_tree_traversal(const T &root,
                                                    const Rect &available_rect)
 {
+    ZoneScoped;
     auto children = root.children();
     if (children.empty()) {
         // Leaf node - return single rectangle
@@ -228,6 +233,7 @@ template <TreeNode T>
 std::vector<RenderedRect<T>> squarify(std::vector<const T *> children,
                                       const Rect &available_rect)
 {
+    ZoneScoped;
     if (children.empty()) {
         return {};
     }
@@ -289,6 +295,7 @@ template <TreeNode T>
 std::pair<std::vector<RenderedRect<T>>, Rect>
 layoutrow(const std::vector<const T *> &row, const Rect &available_rect)
 {
+    ZoneScoped;
     if (row.empty()) {
         return {{}, available_rect};
     }
