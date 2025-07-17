@@ -321,10 +321,10 @@ TEST_CASE("TreeMap Layout - Leaf Node", "[layout]")
 
     // Should have 1 rectangle matching the available rect
     REQUIRE(result.size() == 1);
-    REQUIRE(result[0].rect_.x == 10);
-    REQUIRE(result[0].rect_.y == 20);
-    REQUIRE(result[0].rect_.width == 80);
-    REQUIRE(result[0].rect_.height == 60);
+    REQUIRE(result[0].rect_.x == 10.0F);
+    REQUIRE(result[0].rect_.y == 20.0F);
+    REQUIRE(result[0].rect_.width == 80.0F);
+    REQUIRE(result[0].rect_.height == 60.0F);
 }
 
 // ========================================
@@ -426,7 +426,7 @@ TEST_CASE("Layoutrow Function", "[layoutrow]")
 
     SECTION("Horizontal rectangle")
     {
-        Rect available{0, 0, 200, 100}; // wider than tall
+        Rect available{0, 0, 20, 10}; // wider than tall
         auto [result, remaining_space] = layoutrow(row, available);
 
         REQUIRE(result.size() == 2);
@@ -445,11 +445,16 @@ TEST_CASE("Layoutrow Function", "[layoutrow]")
         // Check that both are within bounds
         REQUIRE(within_bounds(result[0].rect_, available));
         REQUIRE(within_bounds(result[1].rect_, available));
+
+        REQUIRE(remaining_space.x == 15.0F);
+        REQUIRE(remaining_space.y == 0.0F);
+        REQUIRE(remaining_space.width == 5.0F);
+        REQUIRE(remaining_space.height == 10.0F);
     }
 
     SECTION("Vertical rectangle")
     {
-        Rect available{0, 0, 100, 200}; // taller than wide
+        Rect available{0, 0, 10, 20}; // taller than wide
         auto [result, remaining_space] = layoutrow(row, available);
 
         REQUIRE(result.size() == 2);
@@ -468,6 +473,11 @@ TEST_CASE("Layoutrow Function", "[layoutrow]")
         // Check that both are within bounds
         REQUIRE(within_bounds(result[0].rect_, available));
         REQUIRE(within_bounds(result[1].rect_, available));
+
+        REQUIRE(remaining_space.x == 0.0F);
+        REQUIRE(remaining_space.y == 15.0F);
+        REQUIRE(remaining_space.width == 10.0F);
+        REQUIRE(remaining_space.height == 5.0F);
     }
 
     SECTION("Empty row")
@@ -488,7 +498,7 @@ TEST_CASE("Squarify Function", "[squarify]")
         auto node2 = std::make_unique<MockTreeNode>("small", 50.0f);
 
         std::vector<const MockTreeNode *> children = {node1.get(), node2.get()};
-        Rect available{0, 0, 200, 100};
+        Rect available{0, 0, 10.0F, 15.0F};
 
         auto result = squarify(children, available);
 
@@ -519,7 +529,7 @@ TEST_CASE("Squarify Function", "[squarify]")
 
         std::vector<const MockTreeNode *> children = {node1.get(), node2.get(),
                                                       node3.get()};
-        Rect available{0, 0, 300, 200};
+        Rect available{0, 0, 17.5F, 10.0F};
 
         auto result = squarify(children, available);
 
@@ -585,7 +595,7 @@ TEST_CASE("Tree Traversal Coordinate Bug", "[tree_traversal]")
         auto root =
             std::make_unique<MockTreeNode>("root", std::move(root_children));
 
-        Rect available{0, 0, 200, 100};
+        Rect available{0, 0, 5, 20};
 
         std::cout << "\n=== Tree Traversal Coordinate Test ===\n";
         std::cout << "Available rect: ";
