@@ -26,8 +26,14 @@ struct Rect {
     float x, y, width, height;
 };
 
-float width(const Rect &r) { return std::min(r.width, r.height); }
-bool is_horizontal(const Rect &r) { return r.width >= r.height; }
+float shorter_side(const Rect &r) { return std::min(r.width, r.height); }
+float area(const Rect &r) { return r.width * r.height; }
+enum class RectOrientation { horizontal, vertical };
+RectOrientation orientation(const Rect &r)
+{
+    return r.width >= r.height ? RectOrientation::horizontal
+                               : RectOrientation::vertical;
+}
 ImVec2 rect_min(const Rect &r) { return {r.x, r.y}; }
 ImVec2 rect_max(const Rect &r) { return {r.x + r.width, r.y + r.height}; }
 
@@ -219,32 +225,6 @@ template <typename T> float row_area(const std::vector<const T *> &row)
                            });
 }
 
-template <TreeNode T>
-Rect remaining_space_after_row(const std::vector<const T *> &row,
-                               const Rect &available_rect)
-{
-    if (row.empty()) {
-        return available_rect;
-    }
-
-    // Determine row orientation based on available space
-    bool horizontal = is_horizontal(available_rect);
-    float row_width = width(available_rect);
-    float row_height = row_area(row) / row_width;
-
-    // Calculate remaining space after placing this row
-    Rect remaining_rect = available_rect;
-    if (horizontal) {
-        remaining_rect.x += row_width;
-        remaining_rect.width -= row_width;
-    } else {
-        remaining_rect.y += row_height;
-        remaining_rect.height -= row_height;
-    }
-
-    return remaining_rect;
-}
-
 // Core squarify algorithm - iterative implementation for single-level layout
 template <TreeNode T>
 std::vector<RenderedRect<T>> squarify(std::vector<const T *> children,
@@ -271,7 +251,7 @@ std::vector<RenderedRect<T>> squarify(std::vector<const T *> children,
         std::vector<const T *> test_row = current_row;
         test_row.push_back(next_child);
 
-        float w = width(current_rect);
+        float w = shorter_side(current_rect);
         float current_worst = worst_aspect_ratio(current_row, w);
         float test_worst = worst_aspect_ratio(test_row, w);
 
@@ -280,65 +260,80 @@ std::vector<RenderedRect<T>> squarify(std::vector<const T *> children,
             current_row.push_back(next_child);
         } else {
             // Flush current row and start new one - aspect ratio would worsen
-            auto row_results = layoutrow<T>(current_row, current_rect);
+            auto [row_results, remaining_space] =
+                layoutrow<T>(current_row, current_rect);
             results.insert(results.end(), row_results.begin(),
                            row_results.end());
 
-            current_rect =
-                remaining_space_after_row<T>(current_row, current_rect);
+            current_rect = remaining_space;
             current_row = {next_child};
         }
     }
 
     // Flush final row
     if (!current_row.empty()) {
-        auto row_results = layoutrow<T>(current_row, current_rect);
+        auto [row_results, remaining_space] =
+            layoutrow<T>(current_row, current_rect);
         results.insert(results.end(), row_results.begin(), row_results.end());
+        assert(std::abs(area(remaining_space)) < 1.0F);
     }
 
     return results;
 }
 
-/// @brief Layout one row in the available rectangle
+/// @brief Layout one row in the available rectangle, i.e. calculate sizes of
+/// each element
 /// @tparam T
 /// @param row Nodes to layout
 /// @param available_rect coordinates and available space
 /// @return
 template <TreeNode T>
-std::vector<RenderedRect<T>> layoutrow(const std::vector<const T *> &row,
-                                       const Rect &available_rect)
+std::pair<std::vector<RenderedRect<T>>, Rect>
+layoutrow(const std::vector<const T *> &row, const Rect &available_rect)
 {
-    assert(!row.empty() && "Layout row should not be called with empty row");
+    if (row.empty()) {
+        return {{}, available_rect};
+    }
+
+    assert(row_area(row) <= area(available_rect));
 
     std::vector<RenderedRect<T>> results;
     results.reserve(row.size());
 
-    float total_area = row_area(row);
-
-    // Determine row orientation based on available space
-    bool horizontal = is_horizontal(available_rect);
-    float row_width = width(available_rect);
-    float row_height = total_area / row_width;
-
-    // Position each rectangle in the row
-    float current_offset = 0;
-    for (const T *node : row) {
-        Rect rect;
-        if (horizontal) {
-            float rect_height = node->size() / row_width;
-            rect = {available_rect.x, available_rect.y + current_offset,
-                    row_width, rect_height};
-            current_offset += rect_height;
-        } else {
-            float rect_width = node->size() / row_height;
-            rect = {available_rect.x + current_offset, available_rect.y,
-                    rect_width, row_height};
-            current_offset += rect_width;
+    const auto rect_orientation = orientation(available_rect);
+    if (rect_orientation == RectOrientation::horizontal) {
+        float x_offset = 0;
+        for (const T *node : row) {
+            const float rect_width = node->size() / available_rect.height;
+            results.emplace_back(node, Rect{
+                                           .x = available_rect.x + x_offset,
+                                           .y = available_rect.y,
+                                           .width = rect_width,
+                                           .height = available_rect.height,
+                                       });
+            x_offset += rect_width;
         }
-        results.emplace_back(node, rect);
+        return {results, Rect{.x = x_offset,
+                              .y = available_rect.y,
+                              .width = available_rect.width - x_offset,
+                              .height = available_rect.height}};
+    } else {
+        float y_offset = 0;
+        for (const T *node : row) {
+            const float rect_height = node->size() / available_rect.width;
+            results.emplace_back(node, Rect{
+                                           .x = available_rect.x,
+                                           .y = available_rect.y + y_offset,
+                                           .width = available_rect.width,
+                                           .height = rect_height,
+                                       });
+            y_offset += rect_height;
+        }
+        return {results, Rect{.x = available_rect.x,
+                              .y = y_offset,
+                              .width = available_rect.width,
+                              .height = available_rect.height - y_offset}};
     }
-
-    return results;
 }
 
 } // namespace treemap

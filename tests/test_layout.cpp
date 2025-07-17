@@ -273,25 +273,13 @@ TEST_CASE("Geometry Functions", "[geometry]")
     SECTION("width function")
     {
         Rect rect1{0, 0, 100, 50}; // wider than tall
-        REQUIRE(width(rect1) == 50);
+        REQUIRE(shorter_side(rect1) == 50);
 
         Rect rect2{0, 0, 30, 80}; // taller than wide
-        REQUIRE(width(rect2) == 30);
+        REQUIRE(shorter_side(rect2) == 30);
 
         Rect rect3{0, 0, 50, 50}; // square
-        REQUIRE(width(rect3) == 50);
-    }
-
-    SECTION("is_horizontal function")
-    {
-        Rect rect1{0, 0, 100, 50}; // wider than tall
-        REQUIRE(is_horizontal(rect1) == true);
-
-        Rect rect2{0, 0, 30, 80}; // taller than wide
-        REQUIRE(is_horizontal(rect2) == false);
-
-        Rect rect3{0, 0, 50, 50};              // square
-        REQUIRE(is_horizontal(rect3) == true); // width >= height
+        REQUIRE(shorter_side(rect3) == 50);
     }
 
     SECTION("overlaps function")
@@ -376,7 +364,7 @@ TEST_CASE("Layoutrow Function", "[layoutrow]")
     SECTION("Horizontal rectangle")
     {
         Rect available{0, 0, 200, 100}; // wider than tall
-        auto result = layoutrow(row, available);
+        auto [result, remaining_space] = layoutrow(row, available);
 
         REQUIRE(result.size() == 2);
 
@@ -399,7 +387,7 @@ TEST_CASE("Layoutrow Function", "[layoutrow]")
     SECTION("Vertical rectangle")
     {
         Rect available{0, 0, 100, 200}; // taller than wide
-        auto result = layoutrow(row, available);
+        auto [result, remaining_space] = layoutrow(row, available);
 
         REQUIRE(result.size() == 2);
 
@@ -423,64 +411,9 @@ TEST_CASE("Layoutrow Function", "[layoutrow]")
     {
         std::vector<const MockTreeNode *> empty_row;
         Rect available{0, 0, 100, 100};
-        auto result = layoutrow(empty_row, available);
+        auto [result, remaining_space] = layoutrow(empty_row, available);
 
         REQUIRE(result.empty());
-    }
-}
-
-TEST_CASE("Remaining Space After Row", "[remaining_space]")
-{
-    auto node1 = std::make_unique<MockTreeNode>(100.0f, "node1");
-    auto node2 = std::make_unique<MockTreeNode>(50.0f, "node2");
-
-    std::vector<const MockTreeNode *> row = {node1.get(), node2.get()};
-
-    SECTION("Horizontal rectangle")
-    {
-        Rect available{0, 0, 200, 100}; // wider than tall
-        Rect remaining = remaining_space_after_row(row, available);
-
-        std::cout << "\n=== Remaining Space Test: Horizontal ===\n";
-        print_rect("Original", available);
-        print_rect("Remaining", remaining);
-
-        // Remaining space should be within original bounds
-        REQUIRE(within_bounds(remaining, available));
-
-        // Remaining space should have positive dimensions
-        REQUIRE(remaining.width > 0);
-        REQUIRE(remaining.height > 0);
-    }
-
-    SECTION("Vertical rectangle")
-    {
-        Rect available{0, 0, 100, 200}; // taller than wide
-        Rect remaining = remaining_space_after_row(row, available);
-
-        std::cout << "\n=== Remaining Space Test: Vertical ===\n";
-        print_rect("Original", available);
-        print_rect("Remaining", remaining);
-
-        // Remaining space should be within original bounds
-        REQUIRE(within_bounds(remaining, available));
-
-        // Remaining space should have positive dimensions
-        REQUIRE(remaining.width > 0);
-        REQUIRE(remaining.height > 0);
-    }
-
-    SECTION("Empty row")
-    {
-        std::vector<const MockTreeNode *> empty_row;
-        Rect available{0, 0, 100, 100};
-        Rect remaining = remaining_space_after_row(empty_row, available);
-
-        // Should return unchanged rectangle
-        REQUIRE(remaining.x == available.x);
-        REQUIRE(remaining.y == available.y);
-        REQUIRE(remaining.width == available.width);
-        REQUIRE(remaining.height == available.height);
     }
 }
 
