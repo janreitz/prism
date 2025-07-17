@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cmath>
 #include <functional>
+#include <numeric>
 
 std::expected<FileInfo, FileAccessError>
 get_file_info(const std::filesystem::path &path)
@@ -48,18 +49,11 @@ float FileSystemNode::size() const
             file_info_.file_size_); // Ensure minimum size for visualization
     }
 
-    // For directories, size is sum of children
-    return std::max(
-        1.0f, sum_children_sizes()); // Ensure directories have minimum size too
-}
-
-float FileSystemNode::sum_children_sizes() const
-{
-    float total = 0;
-    for (const auto &child : children_) {
-        total += child->size();
-    }
-    return total;
+    return std::accumulate(children_.cbegin(), children_.cend(),
+                           // Ensure minimum size for visualization
+                           1.0F, [](float size, const auto &child) {
+                               return size + child->size();
+                           });
 }
 
 std::vector<const FileSystemNode *> FileSystemNode::children() const

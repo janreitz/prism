@@ -56,8 +56,6 @@ class FileSystemNode
     FileSystemNode *parent_;
     std::vector<std::unique_ptr<FileSystemNode>> children_;
     FileInfo file_info_; // Always valid - no std::expected needed
-
-    float sum_children_sizes() const;
 };
 
 // Factory function for creating nodes with error handling
