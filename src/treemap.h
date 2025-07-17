@@ -22,7 +22,7 @@ template <typename T>
 concept TreeNode = requires(T t) {
     { t.size() } -> std::convertible_to<float>;
     { t.parent() } -> std::convertible_to<T *>;
-    { t.children() } -> std::convertible_to<std::vector<T *>>;
+    { t.children() } -> std::convertible_to<std::vector<const T *>>;
 };
 
 struct Rect {
@@ -202,15 +202,7 @@ std::vector<RenderedRect<T>> layout_tree_traversal(const T &root,
                                             .height = available_rect.height})};
     }
 
-    // Convert to const pointers and sort by decreasing size
-    // TODO refactor to remove this step
-
-    std::vector<const T *> const_children;
-    for (const T *child : children) {
-        const_children.push_back(child);
-    }
-
-    auto child_layouts = squarify(const_children, available_rect);
+    auto child_layouts = squarify(children, available_rect);
 
 #if ENABLE_PARALLEL_EXECUTION
     // Parallel version

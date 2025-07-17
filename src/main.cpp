@@ -67,7 +67,7 @@ int main()
     AnalysisResult current_analysis;
 
     current_analysis =
-        analyze_filesystem_with_errors(current_path, max_depth, include_hidden);
+        analyze_filesystem(current_path, max_depth, include_hidden);
     auto filesystem_root = std::move(current_analysis.root);
     std::unique_ptr<TreeMapWidget<FileSystemNode>> treemap =
         filesystem_root
@@ -134,8 +134,8 @@ int main()
             }
 
             current_path = std::filesystem::canonical(path).string();
-            current_analysis = analyze_filesystem_with_errors(
-                current_path, max_depth, include_hidden);
+            current_analysis =
+                analyze_filesystem(current_path, max_depth, include_hidden);
             filesystem_root = std::move(current_analysis.root);
             treemap = filesystem_root
                           ? std::make_unique<TreeMapWidget<FileSystemNode>>(

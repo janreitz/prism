@@ -8,20 +8,24 @@ get_file_info(const std::filesystem::path &path)
 {
     try {
         bool is_directory = std::filesystem::is_directory(path);
-        return FileInfo {
+        return FileInfo{
             .is_directory_ = is_directory,
-            .file_size_ = is_directory ? 0.0f : static_cast<float>(std::filesystem::file_size(path)),
+            .file_size_ = is_directory ? 0.0f
+                                       : static_cast<float>(
+                                             std::filesystem::file_size(path)),
             .last_modified_ = std::chrono::system_clock::to_time_t(
-                std::chrono::time_point_cast<std::chrono::system_clock::duration>(
-                    std::filesystem::last_write_time(path) - std::filesystem::file_time_type::clock::now() + 
-                    std::chrono::system_clock::now()))
-        };
+                std::chrono::time_point_cast<
+                    std::chrono::system_clock::duration>(
+                    std::filesystem::last_write_time(path) -
+                    std::filesystem::file_time_type::clock::now() +
+                    std::chrono::system_clock::now()))};
     } catch (const std::filesystem::filesystem_error &e) {
         return std::unexpected(FileAccessError{.what = e.what()});
     }
 }
 
-FileSystemNode::FileSystemNode(const std::filesystem::path &path, FileSystemNode *parent, FileInfo file_info)
+FileSystemNode::FileSystemNode(const std::filesystem::path &path,
+                               FileSystemNode *parent, FileInfo file_info)
     : path_(path), parent_(parent), file_info_(file_info)
 {
     name_ = path_.filename().string();
@@ -39,11 +43,14 @@ void FileSystemNode::add_child(std::unique_ptr<FileSystemNode> child)
 float FileSystemNode::size() const
 {
     if (!file_info_.is_directory_) {
-        return std::max(1.0f, file_info_.file_size_); // Ensure minimum size for visualization
+        return std::max(
+            1.0f,
+            file_info_.file_size_); // Ensure minimum size for visualization
     }
 
     // For directories, size is sum of children
-    return std::max(1.0f, sum_children_sizes()); // Ensure directories have minimum size too
+    return std::max(
+        1.0f, sum_children_sizes()); // Ensure directories have minimum size too
 }
 
 float FileSystemNode::sum_children_sizes() const
@@ -55,9 +62,9 @@ float FileSystemNode::sum_children_sizes() const
     return total;
 }
 
-std::vector<FileSystemNode *> FileSystemNode::children() const
+std::vector<const FileSystemNode *> FileSystemNode::children() const
 {
-    std::vector<FileSystemNode *> result;
+    std::vector<const FileSystemNode *> result;
     for (const auto &child : children_) {
         result.push_back(child.get());
     }
@@ -89,7 +96,8 @@ std::string FileSystemNode::format_size() const
 std::chrono::duration<double> FileSystemNode::time_since_modified() const
 {
     auto now = std::chrono::system_clock::now();
-    auto mod_time = std::chrono::system_clock::from_time_t(file_info_.last_modified_);
+    auto mod_time =
+        std::chrono::system_clock::from_time_t(file_info_.last_modified_);
     return now - mod_time;
 }
 
@@ -100,72 +108,70 @@ double FileSystemNode::days_since_modified() const
 
 // Factory function for creating nodes with error handling
 std::expected<std::unique_ptr<FileSystemNode>, FileAccessError>
-try_create_filesystem_node(const std::filesystem::path& path, FileSystemNode* parent) {
-    return get_file_info(path)
-        .transform([&](FileInfo file_info) {
-            return std::make_unique<FileSystemNode>(path, parent, std::move(file_info));
-        });
+try_create_filesystem_node(const std::filesystem::path &path,
+                           FileSystemNode *parent)
+{
+    return get_file_info(path).transform([&](FileInfo file_info) {
+        return std::make_unique<FileSystemNode>(path, parent,
+                                                std::move(file_info));
+    });
 }
 
 // Analysis function with comprehensive error tracking
-AnalysisResult analyze_filesystem_with_errors(const std::filesystem::path& root_path, 
-                                             int max_depth,
-                                             bool include_hidden) {
+AnalysisResult analyze_filesystem(const std::filesystem::path &root_path,
+                                  int max_depth, bool include_hidden)
+{
     AnalysisResult result;
-    
+
     auto root_result = try_create_filesystem_node(root_path);
     result.total_attempted++;
-    
+
     if (!root_result) {
         result.errors.push_back(root_result.error());
         return result; // Can't proceed without root
     }
-    
+
     result.root = std::move(*root_result);
     result.successful_nodes++;
-    
-    std::function<void(FileSystemNode&, int)> scan_recursive = [&](FileSystemNode& node, int depth) {
-        if (depth <= 0) return;
-        
-        try {
-            if (!node.is_directory()) return;
-            
-            for (const auto& entry : std::filesystem::directory_iterator(node.path())) {
-                // Skip hidden files/directories unless requested
-                std::string filename = entry.path().filename().string();
-                if (!include_hidden && filename.starts_with(".")) {
-                    continue;
-                }
-                
-                result.total_attempted++;
-                auto child_result = try_create_filesystem_node(entry.path(), &node);
-                
-                if (child_result) {
-                    result.successful_nodes++;
-                    if ((*child_result)->is_directory()) {
-                        scan_recursive(**child_result, depth - 1);
+
+    std::function<void(FileSystemNode &, int)> scan_recursive =
+        [&](FileSystemNode &node, int depth) {
+            if (depth <= 0)
+                return;
+
+            try {
+                if (!node.is_directory())
+                    return;
+
+                for (const auto &entry :
+                     std::filesystem::directory_iterator(node.path())) {
+                    // Skip hidden files/directories unless requested
+                    std::string filename = entry.path().filename().string();
+                    if (!include_hidden && filename.starts_with(".")) {
+                        continue;
                     }
-                    node.add_child(std::move(*child_result));
-                } else {
-                    result.errors.push_back(child_result.error());
+
+                    result.total_attempted++;
+                    auto child_result =
+                        try_create_filesystem_node(entry.path(), &node);
+
+                    if (child_result) {
+                        result.successful_nodes++;
+                        if ((*child_result)->is_directory()) {
+                            scan_recursive(**child_result, depth - 1);
+                        }
+                        node.add_child(std::move(*child_result));
+                    } else {
+                        result.errors.push_back(child_result.error());
+                    }
                 }
+            } catch (const std::filesystem::filesystem_error &e) {
+                result.errors.push_back(FileAccessError{e.what()});
             }
-        } catch (const std::filesystem::filesystem_error& e) {
-            result.errors.push_back(FileAccessError{e.what()});
-        }
-    };
-    
+        };
+
     scan_recursive(*result.root, max_depth);
     return result;
-}
-
-// Legacy analysis function for compatibility
-std::unique_ptr<FileSystemNode>
-analyze_filesystem(const std::filesystem::path &root_path, int max_depth,
-                   bool include_hidden)
-{
-    auto result = analyze_filesystem_with_errors(root_path, max_depth, include_hidden);
-    return std::move(result.root);
 }
 
 // Context analysis function

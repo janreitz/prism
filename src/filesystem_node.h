@@ -27,14 +27,15 @@ get_file_info(const std::filesystem::path &path);
 class FileSystemNode
 {
   public:
-    FileSystemNode(const std::filesystem::path &path, FileSystemNode *parent, FileInfo file_info);
+    FileSystemNode(const std::filesystem::path &path, FileSystemNode *parent,
+                   FileInfo file_info);
 
     void add_child(std::unique_ptr<FileSystemNode> child);
 
     // TreeNode concept interface
     float size() const;
     FileSystemNode *parent() const { return parent_; }
-    std::vector<FileSystemNode *> children() const;
+    std::vector<const FileSystemNode *> children() const;
 
     // Additional interface
     const std::string &name() const { return name_; }
@@ -54,14 +55,15 @@ class FileSystemNode
     std::string name_;
     FileSystemNode *parent_;
     std::vector<std::unique_ptr<FileSystemNode>> children_;
-    FileInfo file_info_;  // Always valid - no std::expected needed
-    
+    FileInfo file_info_; // Always valid - no std::expected needed
+
     float sum_children_sizes() const;
 };
 
 // Factory function for creating nodes with error handling
 std::expected<std::unique_ptr<FileSystemNode>, FileAccessError>
-try_create_filesystem_node(const std::filesystem::path& path, FileSystemNode* parent = nullptr);
+try_create_filesystem_node(const std::filesystem::path &path,
+                           FileSystemNode *parent = nullptr);
 
 // Analysis result with error tracking
 struct AnalysisResult {
@@ -69,22 +71,19 @@ struct AnalysisResult {
     std::vector<FileAccessError> errors;
     size_t total_attempted = 0;
     size_t successful_nodes = 0;
-    
+
     bool has_errors() const { return !errors.empty(); }
-    double success_rate() const { 
-        return total_attempted > 0 ? (double)successful_nodes / total_attempted : 1.0; 
+    double success_rate() const
+    {
+        return total_attempted > 0 ? (double)successful_nodes / total_attempted
+                                   : 1.0;
     }
 };
 
 // Analysis function with comprehensive error tracking
-AnalysisResult analyze_filesystem_with_errors(const std::filesystem::path& root_path, 
-                                             int max_depth = 5,
-                                             bool include_hidden = false);
-
-// Legacy analysis function for compatibility
-std::unique_ptr<FileSystemNode>
-analyze_filesystem(const std::filesystem::path &root_path, int max_depth = 5,
-                   bool include_hidden = false);
+AnalysisResult analyze_filesystem(const std::filesystem::path &root_path,
+                                  int max_depth = 5,
+                                  bool include_hidden = false);
 
 // Contextual coloring support
 struct ColoringContext {

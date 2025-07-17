@@ -47,14 +47,14 @@ class MockTreeNode
 
     MockTreeNode *parent() const { return parent_; }
 
-    std::vector<MockTreeNode *> children() const
+    std::vector<const MockTreeNode *> children() const
     {
         if (std::holds_alternative<std::vector<std::unique_ptr<MockTreeNode>>>(
                 size_or_children_)) {
             const auto &owned_children =
                 std::get<std::vector<std::unique_ptr<MockTreeNode>>>(
                     size_or_children_);
-            std::vector<MockTreeNode *> result;
+            std::vector<const MockTreeNode *> result;
             result.reserve(owned_children.size());
             for (const auto &child : owned_children) {
                 result.push_back(child.get());
