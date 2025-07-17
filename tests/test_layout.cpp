@@ -3,6 +3,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <iostream>
 #include <memory>
+#include <variant>
 #include <vector>
 
 using namespace treemap;
@@ -11,29 +12,79 @@ using namespace treemap;
 class MockTreeNode
 {
   public:
-    MockTreeNode(float size, const std::string &name) : size_(size), name_(name)
+    // Constructor for leaf node
+    MockTreeNode(const std::string &name, float size)
+        : size_or_children_(size), name_(name)
     {
     }
 
-    float size() const { return size_; }
+    // Constructor for branch node
+    MockTreeNode(const std::string &name,
+                 std::vector<std::unique_ptr<MockTreeNode>> &&children)
+        : size_or_children_(std::move(children)), name_(name)
+    {
+        // Set parent pointers for all children
+        for (auto &child : std::get<std::vector<std::unique_ptr<MockTreeNode>>>(
+                 size_or_children_)) {
+            child->parent_ = this;
+        }
+    }
+
+    float size() const
+    {
+        if (std::holds_alternative<float>(size_or_children_)) {
+            return std::get<float>(size_or_children_);
+        } else {
+            float total = 0.0f;
+            for (const auto &child :
+                 std::get<std::vector<std::unique_ptr<MockTreeNode>>>(
+                     size_or_children_)) {
+                total += child->size();
+            }
+            return total;
+        }
+    }
+
     MockTreeNode *parent() const { return parent_; }
-    std::vector<MockTreeNode *> children() const { return children_; }
+
+    std::vector<MockTreeNode *> children() const
+    {
+        if (std::holds_alternative<std::vector<std::unique_ptr<MockTreeNode>>>(
+                size_or_children_)) {
+            const auto &owned_children =
+                std::get<std::vector<std::unique_ptr<MockTreeNode>>>(
+                    size_or_children_);
+            std::vector<MockTreeNode *> result;
+            result.reserve(owned_children.size());
+            for (const auto &child : owned_children) {
+                result.push_back(child.get());
+            }
+            return result;
+        } else {
+            return {};
+        }
+    }
 
     void add_child(std::unique_ptr<MockTreeNode> child)
     {
         child->parent_ = this;
-        children_.push_back(child.get());
-        owned_children_.push_back(std::move(child));
+
+        if (std::holds_alternative<float>(size_or_children_)) {
+            // Convert from leaf to parent node
+            size_or_children_ = std::vector<std::unique_ptr<MockTreeNode>>();
+        }
+
+        std::get<std::vector<std::unique_ptr<MockTreeNode>>>(size_or_children_)
+            .push_back(std::move(child));
     }
 
     const std::string &name() const { return name_; }
 
   private:
-    float size_;
+    std::variant<float, std::vector<std::unique_ptr<MockTreeNode>>>
+        size_or_children_;
     std::string name_;
     MockTreeNode *parent_ = nullptr;
-    std::vector<MockTreeNode *> children_;
-    std::vector<std::unique_ptr<MockTreeNode>> owned_children_;
 };
 
 // Helper function to print rectangle details
@@ -114,9 +165,10 @@ bool check_bounds_detailed(const std::vector<RenderedRect<MockTreeNode>> &rects,
 TEST_CASE("TreeMap Layout - Simple Case", "[layout]")
 {
     // Create a simple tree: root with two children
-    auto root = std::make_unique<MockTreeNode>(100.0f, "root");
-    root->add_child(std::make_unique<MockTreeNode>(60.0f, "child1"));
-    root->add_child(std::make_unique<MockTreeNode>(40.0f, "child2"));
+    std::vector<std::unique_ptr<MockTreeNode>> children;
+    children.push_back(std::make_unique<MockTreeNode>("child1", 60.0f));
+    children.push_back(std::make_unique<MockTreeNode>("child2", 40.0f));
+    auto root = std::make_unique<MockTreeNode>("root", std::move(children));
 
     Rect available_rect{0, 0, 100, 100};
 
@@ -142,10 +194,11 @@ TEST_CASE("TreeMap Layout - Simple Case", "[layout]")
 TEST_CASE("TreeMap Layout - Three Children", "[layout]")
 {
     // Create a tree with three children of different sizes
-    auto root = std::make_unique<MockTreeNode>(100.0f, "root");
-    root->add_child(std::make_unique<MockTreeNode>(50.0f, "large"));
-    root->add_child(std::make_unique<MockTreeNode>(30.0f, "medium"));
-    root->add_child(std::make_unique<MockTreeNode>(20.0f, "small"));
+    std::vector<std::unique_ptr<MockTreeNode>> children;
+    children.push_back(std::make_unique<MockTreeNode>("large", 50.0f));
+    children.push_back(std::make_unique<MockTreeNode>("medium", 30.0f));
+    children.push_back(std::make_unique<MockTreeNode>("small", 20.0f));
+    auto root = std::make_unique<MockTreeNode>("root", std::move(children));
 
     Rect available_rect{0, 0, 200, 100};
 
@@ -170,18 +223,27 @@ TEST_CASE("TreeMap Layout - Three Children", "[layout]")
 TEST_CASE("TreeMap Layout - Nested Structure", "[layout]")
 {
     // Create a nested structure
-    auto root = std::make_unique<MockTreeNode>(100.0f, "root");
+    std::vector<std::unique_ptr<MockTreeNode>> dir1_children;
+    dir1_children.push_back(
+        std::make_unique<MockTreeNode>("dir1_file1", 40.0f));
+    dir1_children.push_back(
+        std::make_unique<MockTreeNode>("dir1_file2", 30.0f));
+    auto dir1 =
+        std::make_unique<MockTreeNode>("dir1", std::move(dir1_children));
 
-    auto dir1 = std::make_unique<MockTreeNode>(70.0f, "dir1");
-    dir1->add_child(std::make_unique<MockTreeNode>(40.0f, "dir1_file1"));
-    dir1->add_child(std::make_unique<MockTreeNode>(30.0f, "dir1_file2"));
+    std::vector<std::unique_ptr<MockTreeNode>> dir2_children;
+    dir2_children.push_back(
+        std::make_unique<MockTreeNode>("dir2_file1", 20.0f));
+    dir2_children.push_back(
+        std::make_unique<MockTreeNode>("dir2_file2", 10.0f));
+    auto dir2 =
+        std::make_unique<MockTreeNode>("dir2", std::move(dir2_children));
 
-    auto dir2 = std::make_unique<MockTreeNode>(30.0f, "dir2");
-    dir2->add_child(std::make_unique<MockTreeNode>(20.0f, "dir2_file1"));
-    dir2->add_child(std::make_unique<MockTreeNode>(10.0f, "dir2_file2"));
-
-    root->add_child(std::move(dir1));
-    root->add_child(std::move(dir2));
+    std::vector<std::unique_ptr<MockTreeNode>> root_children;
+    root_children.push_back(std::move(dir1));
+    root_children.push_back(std::move(dir2));
+    auto root =
+        std::make_unique<MockTreeNode>("root", std::move(root_children));
 
     Rect available_rect{0, 0, 400, 300};
 
@@ -206,8 +268,9 @@ TEST_CASE("TreeMap Layout - Nested Structure", "[layout]")
 TEST_CASE("TreeMap Layout - Single Child", "[layout]")
 {
     // Edge case: single child
-    auto root = std::make_unique<MockTreeNode>(100.0f, "root");
-    root->add_child(std::make_unique<MockTreeNode>(100.0f, "only_child"));
+    std::vector<std::unique_ptr<MockTreeNode>> children;
+    children.push_back(std::make_unique<MockTreeNode>("only_child", 100.0f));
+    auto root = std::make_unique<MockTreeNode>("root", std::move(children));
 
     Rect available_rect{0, 0, 100, 100};
 
@@ -238,7 +301,7 @@ TEST_CASE("TreeMap Layout - Single Child", "[layout]")
 TEST_CASE("TreeMap Layout - Leaf Node", "[layout]")
 {
     // Edge case: leaf node only
-    auto root = std::make_unique<MockTreeNode>(100.0f, "leaf");
+    auto root = std::make_unique<MockTreeNode>("leaf", 100.0f);
 
     Rect available_rect{10, 20, 80, 60};
 
@@ -310,9 +373,9 @@ TEST_CASE("Geometry Functions", "[geometry]")
 
 TEST_CASE("Worst Aspect Ratio Function", "[worst_aspect_ratio]")
 {
-    auto node1 = std::make_unique<MockTreeNode>(100.0f, "node1");
-    auto node2 = std::make_unique<MockTreeNode>(50.0f, "node2");
-    auto node3 = std::make_unique<MockTreeNode>(25.0f, "node3");
+    auto node1 = std::make_unique<MockTreeNode>("node1", 100.0f);
+    auto node2 = std::make_unique<MockTreeNode>("node2", 50.0f);
+    auto node3 = std::make_unique<MockTreeNode>("node3", 25.0f);
 
     std::vector<const MockTreeNode *> row1 = {node1.get()};
     std::vector<const MockTreeNode *> row2 = {node1.get(), node2.get()};
@@ -356,8 +419,8 @@ TEST_CASE("Worst Aspect Ratio Function", "[worst_aspect_ratio]")
 
 TEST_CASE("Layoutrow Function", "[layoutrow]")
 {
-    auto node1 = std::make_unique<MockTreeNode>(100.0f, "node1");
-    auto node2 = std::make_unique<MockTreeNode>(50.0f, "node2");
+    auto node1 = std::make_unique<MockTreeNode>("node1", 100.0f);
+    auto node2 = std::make_unique<MockTreeNode>("node2", 50.0f);
 
     std::vector<const MockTreeNode *> row = {node1.get(), node2.get()};
 
@@ -421,8 +484,8 @@ TEST_CASE("Squarify Function", "[squarify]")
 {
     SECTION("Two elements")
     {
-        auto node1 = std::make_unique<MockTreeNode>(100.0f, "large");
-        auto node2 = std::make_unique<MockTreeNode>(50.0f, "small");
+        auto node1 = std::make_unique<MockTreeNode>("large", 100.0f);
+        auto node2 = std::make_unique<MockTreeNode>("small", 50.0f);
 
         std::vector<const MockTreeNode *> children = {node1.get(), node2.get()};
         Rect available{0, 0, 200, 100};
@@ -450,9 +513,9 @@ TEST_CASE("Squarify Function", "[squarify]")
 
     SECTION("Three elements")
     {
-        auto node1 = std::make_unique<MockTreeNode>(100.0f, "large");
-        auto node2 = std::make_unique<MockTreeNode>(50.0f, "medium");
-        auto node3 = std::make_unique<MockTreeNode>(25.0f, "small");
+        auto node1 = std::make_unique<MockTreeNode>("large", 100.0f);
+        auto node2 = std::make_unique<MockTreeNode>("medium", 50.0f);
+        auto node3 = std::make_unique<MockTreeNode>("small", 25.0f);
 
         std::vector<const MockTreeNode *> children = {node1.get(), node2.get(),
                                                       node3.get()};
@@ -500,18 +563,27 @@ TEST_CASE("Tree Traversal Coordinate Bug", "[tree_traversal]")
         "Child rectangles should be positioned in parent's coordinate space")
     {
         // Create a simple nested structure
-        auto root = std::make_unique<MockTreeNode>(100.0f, "root");
+        std::vector<std::unique_ptr<MockTreeNode>> dir1_children;
+        dir1_children.push_back(
+            std::make_unique<MockTreeNode>("dir1_file1", 30.0f));
+        dir1_children.push_back(
+            std::make_unique<MockTreeNode>("dir1_file2", 30.0f));
+        auto dir1 =
+            std::make_unique<MockTreeNode>("dir1", std::move(dir1_children));
 
-        auto dir1 = std::make_unique<MockTreeNode>(60.0f, "dir1");
-        dir1->add_child(std::make_unique<MockTreeNode>(30.0f, "dir1_file1"));
-        dir1->add_child(std::make_unique<MockTreeNode>(30.0f, "dir1_file2"));
+        std::vector<std::unique_ptr<MockTreeNode>> dir2_children;
+        dir2_children.push_back(
+            std::make_unique<MockTreeNode>("dir2_file1", 20.0f));
+        dir2_children.push_back(
+            std::make_unique<MockTreeNode>("dir2_file2", 20.0f));
+        auto dir2 =
+            std::make_unique<MockTreeNode>("dir2", std::move(dir2_children));
 
-        auto dir2 = std::make_unique<MockTreeNode>(40.0f, "dir2");
-        dir2->add_child(std::make_unique<MockTreeNode>(20.0f, "dir2_file1"));
-        dir2->add_child(std::make_unique<MockTreeNode>(20.0f, "dir2_file2"));
-
-        root->add_child(std::move(dir1));
-        root->add_child(std::move(dir2));
+        std::vector<std::unique_ptr<MockTreeNode>> root_children;
+        root_children.push_back(std::move(dir1));
+        root_children.push_back(std::move(dir2));
+        auto root =
+            std::make_unique<MockTreeNode>("root", std::move(root_children));
 
         Rect available{0, 0, 200, 100};
 
@@ -520,9 +592,9 @@ TEST_CASE("Tree Traversal Coordinate Bug", "[tree_traversal]")
         print_rect("", available);
 
         // First, let's see what squarify does at the root level
-        std::vector<const MockTreeNode *> root_children = {root->children()[0],
-                                                           root->children()[1]};
-        auto root_layout = squarify(root_children, available);
+        std::vector<const MockTreeNode *> root_child_ptrs = {
+            root->children()[0], root->children()[1]};
+        auto root_layout = squarify(root_child_ptrs, available);
 
         std::cout << "\nRoot level layout (dir1 and dir2):\n";
         for (const auto &[node, rect] : root_layout) {
