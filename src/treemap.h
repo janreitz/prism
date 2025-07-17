@@ -311,7 +311,7 @@ layoutrow(const std::vector<const T *> &row, const Rect &available_rect)
                                        });
             x_offset += rect_width;
         }
-        return {results, Rect{.x = x_offset,
+        return {results, Rect{.x = available_rect.x + x_offset,
                               .y = available_rect.y,
                               .width = available_rect.width - x_offset,
                               .height = available_rect.height}};
@@ -328,7 +328,7 @@ layoutrow(const std::vector<const T *> &row, const Rect &available_rect)
             y_offset += rect_height;
         }
         return {results, Rect{.x = available_rect.x,
-                              .y = y_offset,
+                              .y = available_rect.y + y_offset,
                               .width = available_rect.width,
                               .height = available_rect.height - y_offset}};
     }
