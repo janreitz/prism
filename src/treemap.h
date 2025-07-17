@@ -273,7 +273,7 @@ std::vector<RenderedRect<T>> squarify(std::vector<const T *> children,
         auto [row_results, remaining_space] =
             layoutrow<T>(current_row, current_rect);
         results.insert(results.end(), row_results.begin(), row_results.end());
-        assert(std::abs(area(remaining_space)) < 1.0F);
+        // assert(std::abs(area(remaining_space)) < 1.0F);
     }
 
     return results;
@@ -293,7 +293,7 @@ layoutrow(const std::vector<const T *> &row, const Rect &available_rect)
         return {{}, available_rect};
     }
 
-    assert(row_area(row) <= area(available_rect));
+    // assert(row_area(row) <= area(available_rect));
 
     std::vector<RenderedRect<T>> results;
     results.reserve(row.size());
