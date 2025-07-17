@@ -66,10 +66,13 @@ int main()
     ColoringContext current_context;
     AnalysisResult current_analysis;
 
-    current_analysis = analyze_filesystem_with_errors(current_path, max_depth, include_hidden);
+    current_analysis =
+        analyze_filesystem_with_errors(current_path, max_depth, include_hidden);
     auto filesystem_root = std::move(current_analysis.root);
     std::unique_ptr<TreeMapWidget<FileSystemNode>> treemap =
-        filesystem_root ? std::make_unique<TreeMapWidget<FileSystemNode>>(*filesystem_root) : nullptr;
+        filesystem_root
+            ? std::make_unique<TreeMapWidget<FileSystemNode>>(*filesystem_root)
+            : nullptr;
 
     auto update_coloring = [&]() {
         if (!treemap)
@@ -93,16 +96,24 @@ int main()
     auto register_callbacks = [&]() {
         if (treemap) {
             treemap->add_on_node_hover([&](const FileSystemNode &node) {
-                std::string path_info = node.is_directory() ? "Directory: " : "File: ";
-                hovered_info = path_info + node.get_relative_path() + " (" + node.format_size() + ")";
+                std::string path_info =
+                    node.is_directory() ? "Directory: " : "File: ";
+                hovered_info = path_info + node.get_relative_path() + " (" +
+                               node.format_size() + ")";
                 if (!node.is_directory()) {
-                    hovered_info += " - Modified " + std::to_string(static_cast<int>(node.days_since_modified())) + " days ago";
+                    hovered_info += " - Modified " +
+                                    std::to_string(static_cast<int>(
+                                        node.days_since_modified())) +
+                                    " days ago";
                 }
             });
 
             treemap->add_on_node_click([&](const FileSystemNode &node) {
-                std::string path_info = node.is_directory() ? "Selected Directory: " : "Selected File: ";
-                selected_info = path_info + node.get_relative_path() + " (" + node.format_size() + ")";
+                std::string path_info = node.is_directory()
+                                            ? "Selected Directory: "
+                                            : "Selected File: ";
+                selected_info = path_info + node.get_relative_path() + " (" +
+                                node.format_size() + ")";
             });
         }
     };
@@ -123,9 +134,13 @@ int main()
             }
 
             current_path = std::filesystem::canonical(path).string();
-            current_analysis = analyze_filesystem_with_errors(current_path, max_depth, include_hidden);
+            current_analysis = analyze_filesystem_with_errors(
+                current_path, max_depth, include_hidden);
             filesystem_root = std::move(current_analysis.root);
-            treemap = filesystem_root ? std::make_unique<TreeMapWidget<FileSystemNode>>(*filesystem_root) : nullptr;
+            treemap = filesystem_root
+                          ? std::make_unique<TreeMapWidget<FileSystemNode>>(
+                                *filesystem_root)
+                          : nullptr;
             update_coloring();
             register_callbacks();
 
@@ -148,7 +163,8 @@ int main()
         ImGui::NewFrame();
 
         // Enable docking
-        ImGui::DockSpaceOverViewport(0, nullptr, ImGuiDockNodeFlags_PassthruCentralNode);
+        ImGui::DockSpaceOverViewport(0, nullptr,
+                                     ImGuiDockNodeFlags_PassthruCentralNode);
 
         if (show_demo_window) {
             ImGui::ShowDemoWindow(&show_demo_window);
@@ -219,29 +235,34 @@ int main()
                 ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "Error: %s",
                                    error_message.c_str());
             }
-            
+
             // Show filesystem analysis diagnostics
             if (current_analysis.has_errors()) {
-                ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.0f, 1.0f), 
-                    "Warning: %zu/%zu files inaccessible (%.1f%% success)", 
-                    current_analysis.errors.size(), 
+                ImGui::TextColored(
+                    ImVec4(1.0f, 0.6f, 0.0f, 1.0f),
+                    "Warning: %zu/%zu files inaccessible (%.1f%% success)",
+                    current_analysis.errors.size(),
                     current_analysis.total_attempted,
                     current_analysis.success_rate() * 100.0);
-                
+
                 if (ImGui::IsItemHovered() && ImGui::BeginTooltip()) {
                     ImGui::Text("Inaccessible files:");
-                    int max_show = std::min(10, static_cast<int>(current_analysis.errors.size()));
+                    int max_show = std::min(
+                        10, static_cast<int>(current_analysis.errors.size()));
                     for (int i = 0; i < max_show; ++i) {
-                        ImGui::Text("• %s", current_analysis.errors[i].what.c_str());
+                        ImGui::Text("• %s",
+                                    current_analysis.errors[i].what.c_str());
                     }
                     if (current_analysis.errors.size() > max_show) {
-                        ImGui::Text("... and %zu more", current_analysis.errors.size() - max_show);
+                        ImGui::Text("... and %zu more",
+                                    current_analysis.errors.size() - max_show);
                     }
                     ImGui::EndTooltip();
                 }
             } else if (current_analysis.total_attempted > 0) {
-                ImGui::TextColored(ImVec4(0.0f, 0.8f, 0.0f, 1.0f), 
-                    "✓ All %zu files accessible", current_analysis.successful_nodes);
+                ImGui::TextColored(ImVec4(0.0f, 0.8f, 0.0f, 1.0f),
+                                   "✓ All %zu files accessible",
+                                   current_analysis.successful_nodes);
             }
 
             ImGui::Text("Current Directory: %s", current_path.c_str());
@@ -269,8 +290,9 @@ int main()
                 ImVec2 available = ImGui::GetContentRegionAvail();
                 // Reserve space for the info text below
                 available.y -= 80; // Leave room for separator and text lines
-                if (available.y < 100) available.y = 100; // Minimum height
-                treemap->Render("treemap", available);
+                if (available.y < 100)
+                    available.y = 100; // Minimum height
+                treemap->render("treemap", available);
             } else {
                 ImGui::Text(
                     "No data available - please select a valid directory");
