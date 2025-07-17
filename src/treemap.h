@@ -37,12 +37,15 @@ RectOrientation orientation(const Rect &r)
 ImVec2 rect_min(const Rect &r) { return {r.x, r.y}; }
 ImVec2 rect_max(const Rect &r) { return {r.x + r.width, r.y + r.height}; }
 
+bool less_than_or_equal(const ImVec2 &a, const ImVec2 &b)
+{
+    return a.x <= b.x || a.y <= b.y;
+}
+
 bool overlaps(const Rect &a, const Rect &b)
 {
-    // Two rectangles overlap if they overlap in both x and y dimensions
-    bool x_overlap = a.x < b.x + b.width && b.x < a.x + a.width;
-    bool y_overlap = a.y < b.y + b.height && b.y < a.y + a.height;
-    return x_overlap && y_overlap;
+    return !(less_than_or_equal(rect_max(a), rect_min(b)) ||
+             less_than_or_equal(rect_max(b), rect_min(a)));
 }
 
 bool within_bounds(const Rect &rect, const Rect &bounds)
