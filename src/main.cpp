@@ -44,8 +44,6 @@ int main()
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init(glsl_version);
 
-    bool show_demo_window = true;
-    bool show_another_window = false;
     bool show_treemap_window = true;
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
@@ -63,12 +61,9 @@ int main()
     // Coloring strategy selection
     enum class ColoringMode { FileType, ModificationTime };
     ColoringMode coloring_mode = ColoringMode::FileType;
-    ColoringContext current_context;
-    AnalysisResult current_analysis;
-
-    current_analysis =
-        analyze_filesystem(current_path, max_depth, include_hidden);
-    auto filesystem_root = std::move(current_analysis.root);
+    AnalysisResult fs_analysis =
+        scan_fs(current_path, max_depth, include_hidden);
+    auto filesystem_root = std::move(fs_analysis.root);
     std::unique_ptr<TreeMapWidget<FileSystemNode>> treemap =
         filesystem_root
             ? std::make_unique<TreeMapWidget<FileSystemNode>>(*filesystem_root)
@@ -78,14 +73,13 @@ int main()
         if (!treemap)
             return;
 
-        // Analyze the current tree for context
-        current_context = analyze_coloring_context(*filesystem_root);
-
         if (coloring_mode == ColoringMode::FileType) {
-            auto strategy = create_balanced_extension_strategy(current_context);
+            auto strategy = create_balanced_extension_strategy(
+                fs_analysis.extension_counts);
             treemap->set_coloring_strategy(strategy);
         } else {
-            auto strategy = create_relative_time_strategy(current_context);
+            auto strategy = create_relative_time_strategy(
+                fs_analysis.modification_time_stats);
             treemap->set_coloring_strategy(strategy);
         }
     };
@@ -134,9 +128,8 @@ int main()
             }
 
             current_path = std::filesystem::canonical(path).string();
-            current_analysis =
-                analyze_filesystem(current_path, max_depth, include_hidden);
-            filesystem_root = std::move(current_analysis.root);
+            fs_analysis = scan_fs(current_path, max_depth, include_hidden);
+            filesystem_root = std::move(fs_analysis.root);
             treemap = filesystem_root
                           ? std::make_unique<TreeMapWidget<FileSystemNode>>(
                                 *filesystem_root)
@@ -166,10 +159,6 @@ int main()
         ImGui::DockSpaceOverViewport(0, nullptr,
                                      ImGuiDockNodeFlags_PassthruCentralNode);
 
-        if (show_demo_window) {
-            ImGui::ShowDemoWindow(&show_demo_window);
-        }
-
         {
             static float f = 0.0f;
 
@@ -178,8 +167,6 @@ int main()
             ImGui::Text("Welcome to Prism - Code Analysis Tool");
             ImGui::Separator();
 
-            ImGui::Checkbox("Demo Window", &show_demo_window);
-            ImGui::Checkbox("Another Window", &show_another_window);
             ImGui::Checkbox("TreeMap Window", &show_treemap_window);
 
             ImGui::SliderFloat("float", &f, 0.0f, 1.0f);
@@ -237,32 +224,30 @@ int main()
             }
 
             // Show filesystem analysis diagnostics
-            if (current_analysis.has_errors()) {
+            if (fs_analysis.has_errors()) {
                 ImGui::TextColored(
                     ImVec4(1.0f, 0.6f, 0.0f, 1.0f),
                     "Warning: %zu/%zu files inaccessible (%.1f%% success)",
-                    current_analysis.errors.size(),
-                    current_analysis.total_attempted,
-                    current_analysis.success_rate() * 100.0);
+                    fs_analysis.errors.size(), fs_analysis.total_attempted,
+                    fs_analysis.success_rate() * 100.0);
 
                 if (ImGui::IsItemHovered() && ImGui::BeginTooltip()) {
                     ImGui::Text("Inaccessible files:");
                     int max_show = std::min(
-                        10, static_cast<int>(current_analysis.errors.size()));
+                        10, static_cast<int>(fs_analysis.errors.size()));
                     for (int i = 0; i < max_show; ++i) {
-                        ImGui::Text("• %s",
-                                    current_analysis.errors[i].what.c_str());
+                        ImGui::Text("• %s", fs_analysis.errors[i].what.c_str());
                     }
-                    if (current_analysis.errors.size() > max_show) {
+                    if (fs_analysis.errors.size() > max_show) {
                         ImGui::Text("... and %zu more",
-                                    current_analysis.errors.size() - max_show);
+                                    fs_analysis.errors.size() - max_show);
                     }
                     ImGui::EndTooltip();
                 }
-            } else if (current_analysis.total_attempted > 0) {
+            } else if (fs_analysis.total_attempted > 0) {
                 ImGui::TextColored(ImVec4(0.0f, 0.8f, 0.0f, 1.0f),
                                    "✓ All %zu files accessible",
-                                   current_analysis.successful_nodes);
+                                   fs_analysis.successful_nodes);
             }
 
             ImGui::Text("Current Directory: %s", current_path.c_str());
@@ -305,30 +290,39 @@ int main()
             ImGui::Separator();
             if (coloring_mode == ColoringMode::FileType) {
                 ImGui::Text("File Extensions Found (%zu types):",
-                            current_context.unique_extensions.size());
+                            fs_analysis.extension_counts.size());
 
                 // Show directories first
-                if (current_context.directory_count > 0) {
+                if (fs_analysis.directory_count > 0) {
                     ImGui::TextColored(
                         ImVec4(186 / 255.0f, 85 / 255.0f, 211 / 255.0f, 1.0f),
-                        "■ Directories (%d)", current_context.directory_count);
-                    if (current_context.unique_extensions.size() > 0)
+                        "■ Directories (%ld)", fs_analysis.directory_count);
+                    if (fs_analysis.extension_counts.size() > 0)
                         ImGui::SameLine();
                 }
 
                 // Show file extensions with their assigned colors and counts
-                for (size_t i = 0; i < current_context.unique_extensions.size();
-                     ++i) {
-                    const std::string &ext =
-                        current_context.unique_extensions[i];
-                    int count = current_context.extension_counts.at(ext);
+                std::map<std::string, ImU32> extension_to_color;
+                const float color_increment =
+                    1.0F /
+                    static_cast<float>(fs_analysis.extension_counts.size());
+                float color = 0;
+                for (const auto &[extension, count] :
+                     fs_analysis.extension_counts) {
+                    const float hue =
+                        (1.0F - color) * 120.0F; // 120° (green) to 0° (red)
+                    const float saturation = 0.8F;
+                    const float value = 0.9F;
+                    extension_to_color.insert(
+                        {extension, hsv_to_rgb(hue, saturation, value)});
+                    color += color_increment;
+                }
 
+                int i = 0;
+                for (const auto &[ext, count] : fs_analysis.extension_counts) {
                     // Generate the same color as the strategy
-                    float hue =
-                        (360.0f * i) / current_context.unique_extensions.size();
-                    float saturation = 0.75f;
-                    float value = 0.85f;
-                    ImU32 color = hsv_to_rgb(hue, saturation, value);
+
+                    ImU32 color = extension_to_color.at(ext);
 
                     float r = ((color >> 0) & 0xFF) / 255.0f;
                     float g = ((color >> 8) & 0xFF) / 255.0f;
@@ -340,32 +334,10 @@ int main()
                                        display_ext.c_str(), count);
 
                     // Layout in rows of 4
-                    if ((i + 1) % 4 != 0 &&
-                        i + 1 < current_context.unique_extensions.size()) {
+                    if ((i + 1) % 4 != 0) {
                         ImGui::SameLine();
                     }
-                }
-            } else {
-                if (current_context.has_data()) {
-                    ImGui::Text(
-                        "Modification Time Range (Relative to Directory):");
-                    ImGui::Text("Newest: %.1f days ago",
-                                current_context.min_days_since_modified);
-                    ImGui::Text("Oldest: %.1f days ago",
-                                current_context.max_days_since_modified);
-
-                    ImGui::Spacing();
-                    ImGui::TextColored(ImVec4(0, 1, 0, 1), "■ Newest files");
-                    ImGui::SameLine();
-                    ImGui::TextColored(ImVec4(1, 1, 0, 1), "■ Medium age");
-                    ImGui::SameLine();
-                    ImGui::TextColored(ImVec4(1, 0, 0, 1), "■ Oldest files");
-                    ImGui::SameLine();
-                    ImGui::TextColored(
-                        ImVec4(186 / 255.0f, 85 / 255.0f, 211 / 255.0f, 1.0f),
-                        "■ Directories");
-                } else {
-                    ImGui::Text("No modification time data available");
+                    i++;
                 }
             }
 

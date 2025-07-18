@@ -6,8 +6,8 @@
 #include <imgui.h>
 #include <map>
 #include <memory>
-#include <set>
 #include <string>
+#include <unordered_set>
 #include <variant>
 #include <vector>
 
@@ -52,6 +52,7 @@ class FileSystemNode
     std::filesystem::path path_;
     std::string name_;
     std::vector<std::unique_ptr<FileSystemNode>> children_;
+    size_t size_ = 0;
     FileInfo file_info_; // Always valid - no std::expected needed
 };
 
@@ -59,12 +60,30 @@ class FileSystemNode
 std::expected<std::unique_ptr<FileSystemNode>, FileAccessError>
 try_create_filesystem_node(const std::filesystem::path &path);
 
+struct ModificationTimeStatistics {
+    std::time_t min_modified = std::numeric_limits<std::time_t>::max();
+    std::time_t max_modified = std::numeric_limits<std::time_t>::min();
+};
+
 // Analysis result with error tracking
 struct AnalysisResult {
     std::unique_ptr<FileSystemNode> root;
     std::vector<FileAccessError> errors;
     size_t total_attempted = 0;
     size_t successful_nodes = 0;
+
+    ModificationTimeStatistics modification_time_stats;
+
+    std::map<std::string, int> extension_counts;
+
+    // Size statistics
+    float min_size = std::numeric_limits<float>::max();
+    float max_size = std::numeric_limits<float>::min();
+    float total_size = 0.0f;
+
+    // Directory vs file counts
+    size_t directory_count = 0;
+    size_t file_count = 0;
 
     bool has_errors() const { return !errors.empty(); }
     double success_rate() const
@@ -74,46 +93,17 @@ struct AnalysisResult {
     }
 };
 
+void recurse_fs(FileSystemNode &node, AnalysisResult &analysis);
+
 // Analysis function with comprehensive error tracking
-AnalysisResult analyze_filesystem(const std::filesystem::path &root_path,
-                                  int max_depth = 5,
-                                  bool include_hidden = false);
-
-// Contextual coloring support
-struct ColoringContext {
-    // Modification time statistics
-    std::time_t min_modified = 0;
-    std::time_t max_modified = 0;
-    double min_days_since_modified = 0.0;
-    double max_days_since_modified = 0.0;
-
-    // File extension statistics
-    std::vector<std::string> unique_extensions;
-    std::map<std::string, ImU32> extension_colors;
-    std::map<std::string, int> extension_counts;
-
-    // Size statistics
-    float min_size = 0.0f;
-    float max_size = 0.0f;
-
-    // Directory vs file counts
-    int directory_count = 0;
-    int file_count = 0;
-
-    bool has_data() const
-    {
-        return max_modified > min_modified || !unique_extensions.empty();
-    }
-};
-
-// Context analysis
-ColoringContext analyze_coloring_context(const FileSystemNode &root);
+AnalysisResult scan_fs(const std::filesystem::path &root_path,
+                       int max_depth = 5, bool include_hidden = false);
 
 // Context-aware coloring strategy factories
 std::function<ImU32(const FileSystemNode &)>
-create_relative_time_strategy(const ColoringContext &context);
+create_relative_time_strategy(const ModificationTimeStatistics &context);
 std::function<ImU32(const FileSystemNode &)>
-create_balanced_extension_strategy(const ColoringContext &context);
+create_balanced_extension_strategy(const std::map<std::string, int> &context);
 
 // Color utility functions
 ImU32 hsv_to_rgb(float h, float s, float v);

@@ -37,22 +37,17 @@ FileSystemNode::FileSystemNode(const std::filesystem::path &path,
 
 void FileSystemNode::add_child(std::unique_ptr<FileSystemNode> child)
 {
+    size_ += child->size();
     children_.push_back(std::move(child));
 }
 
 float FileSystemNode::size() const
 {
     if (!file_info_.is_directory_) {
-        return std::max(
-            1.0f,
-            file_info_.file_size_); // Ensure minimum size for visualization
+        return file_info_.file_size_; // Ensure minimum size for visualization
     }
 
-    return std::accumulate(children_.cbegin(), children_.cend(),
-                           // Ensure minimum size for visualization
-                           1.0F, [](float size, const auto &child) {
-                               return size + child->size();
-                           });
+    return static_cast<float>(size_);
 }
 
 std::vector<const FileSystemNode *> FileSystemNode::children() const
@@ -108,135 +103,68 @@ try_create_filesystem_node(const std::filesystem::path &path)
     });
 }
 
-// Analysis function with comprehensive error tracking
-AnalysisResult analyze_filesystem(const std::filesystem::path &root_path,
-                                  int max_depth, bool include_hidden)
+void recurse_fs(FileSystemNode &node, AnalysisResult &analysis,
+                bool include_hidden, int depth)
 {
-    AnalysisResult result;
+    if (!node.is_directory()) {
+        analysis.file_count++;
 
-    auto root_result = try_create_filesystem_node(root_path);
-    result.total_attempted++;
+        const std::time_t mod_time = node.last_modified();
+        analysis.modification_time_stats.min_modified =
+            std::min(mod_time, analysis.modification_time_stats.min_modified);
+        analysis.modification_time_stats.max_modified =
+            std::max(mod_time, analysis.modification_time_stats.max_modified);
 
-    if (!root_result) {
-        result.errors.push_back(root_result.error());
-        return result; // Can't proceed without root
-    }
+        const float size = node.file_size();
+        analysis.total_size += size;
+        analysis.min_size = std::min(size, analysis.min_size);
+        analysis.max_size = std::max(size, analysis.max_size);
 
-    result.root = std::move(*root_result);
-    result.successful_nodes++;
+        analysis.extension_counts[node.get_extension()]++;
+        return;
+    } else {
+        analysis.directory_count++;
 
-    std::function<void(FileSystemNode &, int)> scan_recursive =
-        [&](FileSystemNode &node, int depth) {
-            if (depth <= 0)
-                return;
+        for (const auto &entry :
+             std::filesystem::directory_iterator(node.path())) {
 
-            try {
-                if (!node.is_directory())
-                    return;
-
-                for (const auto &entry :
-                     std::filesystem::directory_iterator(node.path())) {
-                    // Skip hidden files/directories unless requested
-                    std::string filename = entry.path().filename().string();
-                    if (!include_hidden && filename.starts_with(".")) {
-                        continue;
-                    }
-
-                    result.total_attempted++;
-                    auto child_result =
-                        try_create_filesystem_node(entry.path());
-
-                    if (child_result) {
-                        result.successful_nodes++;
-                        if ((*child_result)->is_directory()) {
-                            scan_recursive(**child_result, depth - 1);
-                        }
-                        node.add_child(std::move(*child_result));
-                    } else {
-                        result.errors.push_back(child_result.error());
-                    }
-                }
-            } catch (const std::filesystem::filesystem_error &e) {
-                result.errors.push_back(FileAccessError{e.what()});
+            std::string filename = entry.path().filename().string();
+            if (!include_hidden && filename.starts_with(".")) {
+                continue;
             }
-        };
 
-    scan_recursive(*result.root, max_depth);
-    return result;
+            analysis.total_attempted++;
+            auto child_result = try_create_filesystem_node(entry.path());
+
+            if (!child_result) {
+                analysis.errors.push_back(child_result.error());
+                continue;
+            }
+
+            analysis.successful_nodes++;
+            recurse_fs(**child_result, analysis, include_hidden, depth - 1);
+            node.add_child(std::move(*child_result));
+        }
+    }
 }
 
-// Context analysis function
-ColoringContext analyze_coloring_context(const FileSystemNode &root)
+AnalysisResult scan_fs(const std::filesystem::path &path, int max_depth,
+                       bool include_hidden)
 {
-    ColoringContext context;
-    std::set<std::string> extensions_set;
+    AnalysisResult analysis;
+    analysis.total_attempted++;
+    auto root_result = try_create_filesystem_node(path);
 
-    std::function<void(const FileSystemNode &)> analyze_recursive =
-        [&](const FileSystemNode &node) {
-            // Count directories vs files
-            if (node.is_directory()) {
-                context.directory_count++;
-            } else {
-                context.file_count++;
-
-                // Analyze modification time
-                std::time_t mod_time = node.last_modified();
-                if (context.min_modified == 0 ||
-                    mod_time < context.min_modified) {
-                    context.min_modified = mod_time;
-                }
-                if (mod_time > context.max_modified) {
-                    context.max_modified = mod_time;
-                }
-
-                // Analyze file size
-                float size = node.file_size();
-                if (context.min_size == 0.0f || size < context.min_size) {
-                    context.min_size = size;
-                }
-                if (size > context.max_size) {
-                    context.max_size = size;
-                }
-
-                // Collect extensions
-                std::string ext = node.get_extension();
-                if (!ext.empty()) {
-                    extensions_set.insert(ext);
-                    context.extension_counts[ext]++;
-                }
-            }
-
-            // Recurse to children
-            for (const FileSystemNode *child : node.children()) {
-                analyze_recursive(*child);
-            }
-        };
-
-    analyze_recursive(root);
-
-    // Calculate days since modified range
-    if (context.max_modified > context.min_modified) {
-        auto now = std::chrono::system_clock::now();
-        auto min_time =
-            std::chrono::system_clock::from_time_t(context.min_modified);
-        auto max_time =
-            std::chrono::system_clock::from_time_t(context.max_modified);
-
-        context.max_days_since_modified =
-            std::chrono::duration<double>(now - min_time).count() /
-            (24.0 * 3600.0);
-        context.min_days_since_modified =
-            std::chrono::duration<double>(now - max_time).count() /
-            (24.0 * 3600.0);
+    if (!root_result) {
+        analysis.errors.push_back(root_result.error());
+        return analysis; // Can't proceed without root
     }
 
-    // Convert extensions set to vector for stable ordering
-    context.unique_extensions =
-        std::vector<std::string>(extensions_set.begin(), extensions_set.end());
-    std::sort(context.unique_extensions.begin(),
-              context.unique_extensions.end());
+    analysis.root = std::move(*root_result);
+    analysis.successful_nodes++;
 
-    return context;
+    recurse_fs(*analysis.root, analysis, include_hidden, max_depth);
+    return analysis;
 }
 
 // HSV to RGB conversion helper
@@ -280,71 +208,49 @@ ImU32 hsv_to_rgb(float h, float s, float v)
 
 // Context-aware relative time coloring strategy
 std::function<ImU32(const FileSystemNode &)>
-create_relative_time_strategy(const ColoringContext &context)
+create_relative_time_strategy(const ModificationTimeStatistics &context)
 {
-    return [context](const FileSystemNode &node) -> ImU32 {
+    const auto range = context.max_modified - context.min_modified;
+    const auto offset = context.min_modified;
+    return [offset, range](const FileSystemNode &node) -> ImU32 {
         if (node.is_directory()) {
             return IM_COL32(186, 85, 211, 255); // Purple for directories
         }
 
-        if (!context.has_data() || context.max_days_since_modified <=
-                                       context.min_days_since_modified) {
-            return IM_COL32(128, 128, 128, 255); // Gray fallback
-        }
-
-        double days = node.days_since_modified();
-
-        // Normalize to 0-1 range based on actual data range
-        float t = static_cast<float>((days - context.min_days_since_modified) /
-                                     (context.max_days_since_modified -
-                                      context.min_days_since_modified));
-        t = std::clamp(t, 0.0f, 1.0f);
+        const auto t =
+            (static_cast<float>(node.last_modified()) - offset) / range;
 
         // Green (fresh) -> Yellow -> Orange -> Red (old)
         // Use HSV color space for smooth transitions
-        float hue = (1.0f - t) * 120.0f; // 120° (green) to 0° (red)
-        float saturation = 0.8f;
-        float value = 0.9f;
+        const float hue = (1.0F - t) * 120.0F; // 120° (green) to 0° (red)
+        const float saturation = 0.8F;
+        const float value = 0.9F;
 
         return hsv_to_rgb(hue, saturation, value);
     };
 }
 
 // Context-aware balanced extension coloring strategy
-std::function<ImU32(const FileSystemNode &)>
-create_balanced_extension_strategy(const ColoringContext &context)
+std::function<ImU32(const FileSystemNode &)> create_balanced_extension_strategy(
+    const std::map<std::string, int> &extension_counts)
 {
-    return [context](const FileSystemNode &node) -> ImU32 {
+    std::map<std::string, ImU32> extension_to_color;
+    const float color_increment =
+        1.0F / static_cast<float>(extension_counts.size());
+    float color = 0;
+    for (const auto &[extension, count] : extension_counts) {
+        const float hue = (1.0F - color) * 120.0F; // 120° (green) to 0° (red)
+        const float saturation = 0.8F;
+        const float value = 0.9F;
+        extension_to_color.insert(
+            {extension, hsv_to_rgb(hue, saturation, value)});
+        color += color_increment;
+    }
+
+    return [extension_to_color](const FileSystemNode &node) -> ImU32 {
         if (node.is_directory()) {
             return IM_COL32(186, 85, 211, 255); // Purple for directories
         }
-
-        std::string ext = node.get_extension();
-
-        // Check if we have a pre-computed color
-        if (context.extension_colors.find(ext) !=
-            context.extension_colors.end()) {
-            return context.extension_colors.at(ext);
-        }
-
-        // Find index of extension
-        auto it = std::find(context.unique_extensions.begin(),
-                            context.unique_extensions.end(), ext);
-        if (it == context.unique_extensions.end()) {
-            return IM_COL32(200, 200, 200, 255); // Light gray for unknown
-        }
-
-        size_t index = std::distance(context.unique_extensions.begin(), it);
-
-        // Generate evenly spaced colors in HSV space
-        if (context.unique_extensions.size() <= 1) {
-            return IM_COL32(100, 150, 200, 255); // Default blue
-        }
-
-        float hue = (360.0f * index) / context.unique_extensions.size();
-        float saturation = 0.75f;
-        float value = 0.85f;
-
-        return hsv_to_rgb(hue, saturation, value);
+        return extension_to_color.at(node.get_extension());
     };
 }
