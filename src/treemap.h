@@ -21,7 +21,6 @@ namespace treemap
 template <typename T>
 concept TreeNode = requires(T t) {
     { t.size() } -> std::convertible_to<float>;
-    { t.parent() } -> std::convertible_to<T *>;
     { t.children() } -> std::convertible_to<std::vector<const T *>>;
 };
 

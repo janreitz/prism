@@ -26,8 +26,8 @@ get_file_info(const std::filesystem::path &path)
 }
 
 FileSystemNode::FileSystemNode(const std::filesystem::path &path,
-                               FileSystemNode *parent, FileInfo file_info)
-    : path_(path), parent_(parent), file_info_(file_info)
+                               FileInfo file_info)
+    : path_(path), file_info_(file_info)
 {
     name_ = path_.filename().string();
     if (name_.empty()) {
@@ -37,7 +37,6 @@ FileSystemNode::FileSystemNode(const std::filesystem::path &path,
 
 void FileSystemNode::add_child(std::unique_ptr<FileSystemNode> child)
 {
-    child->parent_ = this;
     children_.push_back(std::move(child));
 }
 
@@ -102,12 +101,10 @@ double FileSystemNode::days_since_modified() const
 
 // Factory function for creating nodes with error handling
 std::expected<std::unique_ptr<FileSystemNode>, FileAccessError>
-try_create_filesystem_node(const std::filesystem::path &path,
-                           FileSystemNode *parent)
+try_create_filesystem_node(const std::filesystem::path &path)
 {
     return get_file_info(path).transform([&](FileInfo file_info) {
-        return std::make_unique<FileSystemNode>(path, parent,
-                                                std::move(file_info));
+        return std::make_unique<FileSystemNode>(path, std::move(file_info));
     });
 }
 
@@ -147,7 +144,7 @@ AnalysisResult analyze_filesystem(const std::filesystem::path &root_path,
 
                     result.total_attempted++;
                     auto child_result =
-                        try_create_filesystem_node(entry.path(), &node);
+                        try_create_filesystem_node(entry.path());
 
                     if (child_result) {
                         result.successful_nodes++;

@@ -27,14 +27,12 @@ get_file_info(const std::filesystem::path &path);
 class FileSystemNode
 {
   public:
-    FileSystemNode(const std::filesystem::path &path, FileSystemNode *parent,
-                   FileInfo file_info);
+    FileSystemNode(const std::filesystem::path &path, FileInfo file_info);
 
     void add_child(std::unique_ptr<FileSystemNode> child);
 
     // TreeNode concept interface
     float size() const;
-    FileSystemNode *parent() const { return parent_; }
     std::vector<const FileSystemNode *> children() const;
 
     // Additional interface
@@ -53,15 +51,13 @@ class FileSystemNode
   private:
     std::filesystem::path path_;
     std::string name_;
-    FileSystemNode *parent_;
     std::vector<std::unique_ptr<FileSystemNode>> children_;
     FileInfo file_info_; // Always valid - no std::expected needed
 };
 
 // Factory function for creating nodes with error handling
 std::expected<std::unique_ptr<FileSystemNode>, FileAccessError>
-try_create_filesystem_node(const std::filesystem::path &path,
-                           FileSystemNode *parent = nullptr);
+try_create_filesystem_node(const std::filesystem::path &path);
 
 // Analysis result with error tracking
 struct AnalysisResult {
