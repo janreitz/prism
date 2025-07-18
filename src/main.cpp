@@ -6,6 +6,7 @@
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
 #include <iostream>
+#include <tracy/Tracy.hpp>
 
 static void glfw_error_callback(int error, const char *description)
 {
@@ -149,6 +150,7 @@ int main()
     register_callbacks();
 
     while (!glfwWindowShouldClose(window)) {
+        FrameMark;
         glfwPollEvents();
 
         ImGui_ImplOpenGL3_NewFrame();
