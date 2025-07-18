@@ -139,7 +139,8 @@ void validate_layout(const std::vector<RenderedRect<T>> &layout,
 /// @param available_rect
 /// @return
 template <TreeNode T>
-std::vector<RenderedRect<T>> layout(const T &root, const Rect &available_rect)
+std::vector<RenderedRect<T>> layout(const T &root, const Rect &available_rect,
+                                    bool parallelize = false)
 {
     ZoneScoped;
 
@@ -170,7 +171,8 @@ std::vector<RenderedRect<T>> layout(const T &root, const Rect &available_rect)
     // }
     // assert(error < 1.0f);
 
-    auto layout_result = layout_tree_traversal(root, available_rect_scaled);
+    auto layout_result =
+        layout_tree_traversal(root, available_rect_scaled, parallelize);
 
     // Rescale layout result to screen coordinates and reapply initial screen
     // space offset
@@ -189,7 +191,8 @@ std::vector<RenderedRect<T>> layout(const T &root, const Rect &available_rect)
 
 template <TreeNode T>
 std::vector<RenderedRect<T>> layout_tree_traversal(const T &root,
-                                                   const Rect &available_rect)
+                                                   const Rect &available_rect,
+                                                   bool parallelize)
 {
     ZoneScoped;
     auto children = root.children();
@@ -203,26 +206,36 @@ std::vector<RenderedRect<T>> layout_tree_traversal(const T &root,
 
     auto child_layouts = squarify(children, available_rect);
 
-#if ENABLE_PARALLEL_EXECUTION
-    // Parallel version
-    return std::transform_reduce(
-        std::execution::par, child_layouts.begin(), child_layouts.end(),
-        std::vector<RenderedRect<T>>{},
-        [](std::vector<RenderedRect<T>> a, std::vector<RenderedRect<T>> b) {
-            a.insert(a.end(), b.begin(), b.end());
-            return a;
-        },
-        [](const auto &layout) {
-            return layout_tree_traversal(*layout.node_, layout.rect_);
-        });
-#else
     // Sequential version
-    std::vector<RenderedRect<T>> result;
-    for (const auto &layout : child_layouts) {
-        auto child_rects = layout_tree_traversal(*layout.node_, layout.rect_);
-        result.insert(result.end(), child_rects.begin(), child_rects.end());
+    auto sequential_impl = [&]() -> std::vector<RenderedRect<T>> {
+        std::vector<RenderedRect<T>> result;
+        for (const auto &layout : child_layouts) {
+            auto child_rects =
+                layout_tree_traversal(*layout.node_, layout.rect_, parallelize);
+            result.insert(result.end(), child_rects.begin(), child_rects.end());
+        }
+        return result;
+    };
+
+#if ENABLE_PARALLEL_EXECUTION
+    if (parallelize) {
+        // Parallel version
+        return std::transform_reduce(
+            std::execution::par, child_layouts.begin(), child_layouts.end(),
+            std::vector<RenderedRect<T>>{},
+            [](std::vector<RenderedRect<T>> a, std::vector<RenderedRect<T>> b) {
+                a.insert(a.end(), b.begin(), b.end());
+                return a;
+            },
+            [parallelize](const auto &layout) {
+                return layout_tree_traversal(*layout.node_, layout.rect_,
+                                             parallelize);
+            });
+    } else {
+        return sequential_impl();
     }
-    return result;
+#else
+    return sequential_impl();
 #endif
 }
 

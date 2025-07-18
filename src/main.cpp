@@ -46,6 +46,7 @@ int main()
     ImGui_ImplOpenGL3_Init(glsl_version);
 
     bool show_treemap_window = true;
+    bool parallelize_layout = false;
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
     // Directory analysis setup
@@ -175,6 +176,7 @@ int main()
             ImGui::ColorEdit3("clear color",
                               reinterpret_cast<float *>(&clear_color));
 
+            ImGui::Checkbox("Parallelize layout", &parallelize_layout);
             ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
                         1000.0f / io.Framerate, io.Framerate);
             ImGui::End();
@@ -279,7 +281,7 @@ int main()
                 available.y -= 80; // Leave room for separator and text lines
                 if (available.y < 100)
                     available.y = 100; // Minimum height
-                treemap->render("treemap", available);
+                treemap->render("treemap", available, parallelize_layout);
             } else {
                 ImGui::Text(
                     "No data available - please select a valid directory");

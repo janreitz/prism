@@ -19,7 +19,7 @@ template <treemap::TreeNode T> class TreeMapWidget
   public:
     explicit TreeMapWidget(const T &root);
 
-    bool render(const char *label, const ImVec2 &size);
+    bool render(const char *label, const ImVec2 &size, bool parallelize);
 
     void set_coloring_strategy(
         const std::function<ImU32(const T &)> &coloring_strategy);
@@ -83,7 +83,8 @@ const T &TreeMapWidget<T>::get_selected_node() const
 }
 
 template <treemap::TreeNode T>
-bool TreeMapWidget<T>::render(const char *label, const ImVec2 &size)
+bool TreeMapWidget<T>::render(const char *label, const ImVec2 &size,
+                              bool parallelize)
 {
     ZoneScoped;
     ImGui::BeginChild(label, size, true, ImGuiWindowFlags_NoScrollbar);
@@ -94,7 +95,7 @@ bool TreeMapWidget<T>::render(const char *label, const ImVec2 &size)
 
     // Calculate layout and get rendered rectangles directly
     treemap::Rect available_rect{0, 0, canvas_size.x, canvas_size.y};
-    rendered_rects_ = treemap::layout(root_.get(), available_rect);
+    rendered_rects_ = treemap::layout(root_.get(), available_rect, parallelize);
 
     ImGui::InvisibleButton("treemap_canvas", canvas_size);
 
