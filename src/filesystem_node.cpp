@@ -123,6 +123,9 @@ void recurse_fs(FileSystemNode &node, AnalysisResult &analysis,
         analysis.extension_counts[node.get_extension()]++;
         return;
     } else {
+        if (depth < 0) {
+            return;
+        }
         analysis.directory_count++;
 
         for (const auto &entry :
