@@ -30,12 +30,6 @@ struct Rect {
 
 float shorter_side(const Rect &r) { return std::min(r.width, r.height); }
 float area(const Rect &r) { return r.width * r.height; }
-enum class RectOrientation { horizontal, vertical };
-RectOrientation orientation(const Rect &r)
-{
-    return r.width >= r.height ? RectOrientation::horizontal
-                               : RectOrientation::vertical;
-}
 ImVec2 rect_min(const Rect &r) { return {r.x, r.y}; }
 ImVec2 rect_max(const Rect &r) { return {r.x + r.width, r.y + r.height}; }
 
@@ -229,9 +223,8 @@ template <typename T> struct Row {
 
     bool test(float element_size) const
     {
-        return current_worst <= worst_aspect_ratio(size + element_size,
-                                                   max_element_size,
-                                                   element_size, w);
+        return worst_aspect_ratio(size + element_size, max_element_size,
+                                  element_size, w) <= current_worst;
     }
 
     void push(const T *element)
@@ -244,8 +237,7 @@ template <typename T> struct Row {
         // testing
         min_element_size = element_size;
         current_worst =
-            std::max(current_worst, worst_aspect_ratio(size, max_element_size,
-                                                       min_element_size, w));
+            worst_aspect_ratio(size, max_element_size, min_element_size, w);
     }
 
     Rect rect;
@@ -288,8 +280,7 @@ std::vector<RenderedRect<T>> squarify(const std::vector<const T *> &children,
             current_row.push(largest_remaining);
         } else {
             // Flush current row and start new one - aspect ratio would worsen
-            auto [row_results, remaining_space] =
-                layoutrow<T>(current_row.elements, current_row.rect);
+            auto [row_results, remaining_space] = layoutrow<T>(current_row);
             results.insert(results.end(), row_results.begin(),
                            row_results.end());
             current_row = Row<T>(remaining_space, largest_remaining);
@@ -298,8 +289,7 @@ std::vector<RenderedRect<T>> squarify(const std::vector<const T *> &children,
 
     // Flush final row
     if (current_row.element_count() != 0) {
-        auto [row_results, remaining_space] =
-            layoutrow<T>(current_row.elements, current_row.rect);
+        auto [row_results, remaining_space] = layoutrow<T>(current_row);
         results.insert(results.end(), row_results.begin(), row_results.end());
     }
 
@@ -314,50 +304,56 @@ std::vector<RenderedRect<T>> squarify(const std::vector<const T *> &children,
 /// @return Layouted rects in screen coordinates and remaining space after
 /// layout operation
 template <TreeNode T>
-std::pair<std::vector<RenderedRect<T>>, Rect>
-layoutrow(const std::vector<const T *> &row, const Rect &available_rect)
+std::pair<std::vector<RenderedRect<T>>, Rect> layoutrow(const Row<T> &row)
 {
     ZoneScoped;
-    if (row.empty()) {
+    const auto &available_rect = row.rect;
+
+    if (row.element_count() == 0) {
         return {{}, available_rect};
     }
 
     std::vector<RenderedRect<T>> results;
-    results.reserve(row.size());
+    results.reserve(row.element_count());
 
-    const auto rect_orientation = orientation(available_rect);
-    if (rect_orientation == RectOrientation::horizontal) {
+    // If the available rect is wider than high, "split" it by laying out
+    // elements vertically
+    const bool layout_horizontally =
+        available_rect.width < available_rect.height;
+    if (layout_horizontally) {
         float x_offset = 0;
-        for (const T *node : row) {
-            const float rect_width = node->size() / available_rect.height;
+        float row_height = row.size / available_rect.width;
+        for (const T *node : row.elements) {
+            const float node_width = node->size() / row_height;
             results.emplace_back(node, Rect{
                                            .x = available_rect.x + x_offset,
                                            .y = available_rect.y,
-                                           .width = rect_width,
-                                           .height = available_rect.height,
+                                           .width = node_width,
+                                           .height = row_height,
                                        });
-            x_offset += rect_width;
+            x_offset += node_width;
         }
-        return {results, Rect{.x = available_rect.x + x_offset,
-                              .y = available_rect.y,
-                              .width = available_rect.width - x_offset,
-                              .height = available_rect.height}};
+        return {results, Rect{.x = available_rect.x,
+                              .y = available_rect.y + row_height,
+                              .width = available_rect.width,
+                              .height = available_rect.height - row_height}};
     } else {
         float y_offset = 0;
-        for (const T *node : row) {
-            const float rect_height = node->size() / available_rect.width;
+        float row_width = row.size / available_rect.height;
+        for (const T *node : row.elements) {
+            const float node_height = node->size() / row_width;
             results.emplace_back(node, Rect{
                                            .x = available_rect.x,
                                            .y = available_rect.y + y_offset,
-                                           .width = available_rect.width,
-                                           .height = rect_height,
+                                           .width = row_width,
+                                           .height = node_height,
                                        });
-            y_offset += rect_height;
+            y_offset += node_height;
         }
-        return {results, Rect{.x = available_rect.x,
-                              .y = available_rect.y + y_offset,
-                              .width = available_rect.width,
-                              .height = available_rect.height - y_offset}};
+        return {results, Rect{.x = available_rect.x + row_width,
+                              .y = available_rect.y,
+                              .width = available_rect.width - row_width,
+                              .height = available_rect.height}};
     }
 }
 
