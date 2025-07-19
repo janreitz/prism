@@ -14,6 +14,7 @@
 
 #include <imgui.h> // For ImVec2 -> TODO create custom vec type to avoid this dependency here
 #include <tracy/Tracy.hpp>
+#include <tracy/TracyC.h>
 
 namespace treemap
 {
@@ -213,6 +214,7 @@ template <typename T> struct Row {
         : rect(_rect), w(shorter_side(_rect)),
           max_element_size(initial_element->size())
     {
+        ZoneScoped;
         push(initial_element);
     }
 
@@ -260,8 +262,11 @@ std::vector<RenderedRect<T>> squarify(const std::vector<const T *> &children,
     auto cmp = [](const T *left, const T *right) {
         return left->size() < right->size();
     };
+
+    TracyCZoneN(ctx, "Priority Queue Creation", true);
     std::priority_queue<const T *, std::vector<const T *>, decltype(cmp)>
         remaining_children(children.begin(), children.end(), cmp);
+    TracyCZoneEnd(ctx);
 
     std::vector<RenderedRect<T>> results;
     results.reserve(children.size());
