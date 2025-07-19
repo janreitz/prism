@@ -267,24 +267,24 @@ std::vector<RenderedRect<T>> squarify(const std::vector<const T *> &children,
     results.reserve(children.size());
 
     std::vector<const T *> current_row;
+    current_row.reserve(children.size());
     Rect current_rect = available_rect;
 
+    float current_worst = 0.0F;
     while (!remaining_children.empty()) {
         const T *largest_remaining = remaining_children.top();
         remaining_children.pop();
-
-        std::vector<const T *> test_row = current_row;
-        test_row.push_back(largest_remaining);
+        current_row.push_back(largest_remaining);
 
         float w = shorter_side(current_rect);
-        float current_worst = worst_aspect_ratio(current_row, w);
-        float test_worst = worst_aspect_ratio(test_row, w);
+        float test_worst = worst_aspect_ratio(current_row, w);
 
-        if (current_row.empty() || test_worst <= current_worst) {
+        if (current_row.size() == 1 || test_worst <= current_worst) {
             // Add to current row - aspect ratio improves or stays same
-            current_row.push_back(largest_remaining);
+            current_worst = test_worst;
         } else {
             // Flush current row and start new one - aspect ratio would worsen
+            current_row.pop_back();
             auto [row_results, remaining_space] =
                 layoutrow<T>(current_row, current_rect);
             results.insert(results.end(), row_results.begin(),
