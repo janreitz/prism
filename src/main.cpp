@@ -192,8 +192,6 @@ int main()
                 "##directory", directory_buffer, sizeof(directory_buffer),
                 ImGuiInputTextFlags_EnterReturnsTrue);
             ImGui::SameLine();
-            bool browse_clicked = ImGui::Button("Browse...");
-            ImGui::SameLine();
             bool refresh_clicked = ImGui::Button("Refresh");
 
             // Directory options
@@ -205,19 +203,8 @@ int main()
                 ImGui::Checkbox("Include Hidden", &include_hidden);
 
             // Handle directory changes
-            if (path_changed || browse_clicked || refresh_clicked ||
-                depth_changed || hidden_changed) {
-                if (browse_clicked) {
-                    // For now, just use the current path - a proper file dialog
-                    // would need platform-specific code You could integrate
-                    // with libraries like nativefiledialog or tinyfiledialogs
-                    // here
-                    std::string home_dir =
-                        std::getenv("HOME") ? std::getenv("HOME") : "/tmp";
-                    strncpy(directory_buffer, home_dir.c_str(),
-                            sizeof(directory_buffer) - 1);
-                    directory_buffer[sizeof(directory_buffer) - 1] = '\0';
-                }
+            if (path_changed || refresh_clicked || depth_changed ||
+                hidden_changed) {
                 refresh_directory();
             }
 
