@@ -31,7 +31,7 @@ int main()
     }
 
     glfwMakeContextCurrent(window);
-    glfwSwapInterval(1);
+    glfwSwapInterval(0);
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
