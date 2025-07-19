@@ -371,52 +371,6 @@ TEST_CASE("Geometry Functions", "[geometry]")
     }
 }
 
-TEST_CASE("Worst Aspect Ratio Function", "[worst_aspect_ratio]")
-{
-    auto node1 = std::make_unique<MockTreeNode>("node1", 100.0f);
-    auto node2 = std::make_unique<MockTreeNode>("node2", 50.0f);
-    auto node3 = std::make_unique<MockTreeNode>("node3", 25.0f);
-
-    std::vector<const MockTreeNode *> row1 = {node1.get()};
-    std::vector<const MockTreeNode *> row2 = {node1.get(), node2.get()};
-    std::vector<const MockTreeNode *> row3 = {node1.get(), node2.get(),
-                                              node3.get()};
-
-    SECTION("Single element row")
-    {
-        float ratio = worst_aspect_ratio(row1, 100.0f);
-        REQUIRE(ratio > 0);
-        std::cout << "Single element aspect ratio: " << ratio << std::endl;
-    }
-
-    SECTION("Two element row")
-    {
-        float ratio = worst_aspect_ratio(row2, 100.0f);
-        REQUIRE(ratio > 0);
-        std::cout << "Two element aspect ratio: " << ratio << std::endl;
-    }
-
-    SECTION("Three element row")
-    {
-        float ratio = worst_aspect_ratio(row3, 100.0f);
-        REQUIRE(ratio > 0);
-        std::cout << "Three element aspect ratio: " << ratio << std::endl;
-    }
-
-    SECTION("Empty row")
-    {
-        std::vector<const MockTreeNode *> empty_row;
-        float ratio = worst_aspect_ratio(empty_row, 100.0f);
-        REQUIRE(ratio == std::numeric_limits<float>::max());
-    }
-
-    SECTION("Zero width")
-    {
-        float ratio = worst_aspect_ratio(row1, 0.0f);
-        REQUIRE(ratio == std::numeric_limits<float>::max());
-    }
-}
-
 TEST_CASE("Layoutrow Function", "[layoutrow]")
 {
     auto node1 = std::make_unique<MockTreeNode>("node1", 100.0f);

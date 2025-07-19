@@ -87,36 +87,6 @@ auto hit_test(ImVec2 test, const std::vector<RenderedRect<T>> &rects,
 };
 
 template <TreeNode T>
-float worst_aspect_ratio(const std::vector<const T *> &row, float row_width)
-{
-    ZoneScoped;
-    if (row.empty() || row_width <= 0) {
-        return std::numeric_limits<float>::max();
-    }
-
-    float total_area = 0;
-    for (const T *node : row) {
-        total_area += node->size();
-    }
-
-    if (total_area <= 0) {
-        return std::numeric_limits<float>::max();
-    }
-
-    float row_height = total_area / row_width;
-    float max_aspect_ratio = 0;
-
-    for (const T *node : row) {
-        float rect_width = node->size() / row_height;
-        float aspect_ratio =
-            std::max(rect_width / row_height, row_height / rect_width);
-        max_aspect_ratio = std::max(max_aspect_ratio, aspect_ratio);
-    }
-
-    return max_aspect_ratio;
-}
-
-template <TreeNode T>
 void validate_layout(const std::vector<RenderedRect<T>> &layout,
                      const Rect &available_rect)
 {
@@ -239,13 +209,53 @@ std::vector<RenderedRect<T>> layout_tree_traversal(const T &root,
 #endif
 }
 
-template <typename T> float row_area(const std::vector<const T *> &row)
+float worst_aspect_ratio(float total_size, float max_element_size,
+                         float min_element_size, float w)
 {
-    return std::accumulate(row.cbegin(), row.cend(), 0.0F,
-                           [](float total_area, const T *node) {
-                               return total_area + node->size();
-                           });
+    ZoneScoped;
+    return std::max((w * w * max_element_size) / (total_size * total_size),
+                    (total_size * total_size) / (w * w * min_element_size));
 }
+
+template <typename T> struct Row {
+    Row(const Rect &_rect, const T *initial_element)
+        : rect(_rect), w(shorter_side(_rect)),
+          max_element_size(initial_element->size())
+    {
+        push(initial_element);
+    }
+
+    size_t element_count() const { return elements.size(); }
+
+    bool test(float element_size) const
+    {
+        return current_worst <= worst_aspect_ratio(size + element_size,
+                                                   max_element_size,
+                                                   element_size, w);
+    }
+
+    void push(const T *element)
+    {
+        const float element_size = element->size();
+        elements.push_back(element);
+        size += element_size;
+        // Elements are only pushed in decreasing size order, so max_element
+        // doesn't have to be updated and min element can be assigned without
+        // testing
+        min_element_size = element_size;
+        current_worst =
+            std::max(current_worst, worst_aspect_ratio(size, max_element_size,
+                                                       min_element_size, w));
+    }
+
+    Rect rect;
+    float w;
+    std::vector<const T *> elements;
+    float size = 0;
+    float max_element_size;
+    float min_element_size = std::numeric_limits<float>::max();
+    float current_worst = std::numeric_limits<float>::min();
+};
 
 // Core squarify algorithm - iterative implementation for single-level layout
 template <TreeNode T>
@@ -257,6 +267,7 @@ std::vector<RenderedRect<T>> squarify(const std::vector<const T *> &children,
         return {};
     }
 
+    // Elements are layed out in size-sorted order
     auto cmp = [](const T *left, const T *right) {
         return left->size() < right->size();
     };
@@ -266,41 +277,30 @@ std::vector<RenderedRect<T>> squarify(const std::vector<const T *> &children,
     std::vector<RenderedRect<T>> results;
     results.reserve(children.size());
 
-    std::vector<const T *> current_row;
-    current_row.reserve(children.size());
-    Rect current_rect = available_rect;
+    Row<T> current_row{available_rect, remaining_children.top()};
+    remaining_children.pop();
 
-    float current_worst = 0.0F;
     while (!remaining_children.empty()) {
         const T *largest_remaining = remaining_children.top();
         remaining_children.pop();
-        current_row.push_back(largest_remaining);
 
-        float w = shorter_side(current_rect);
-        float test_worst = worst_aspect_ratio(current_row, w);
-
-        if (current_row.size() == 1 || test_worst <= current_worst) {
-            // Add to current row - aspect ratio improves or stays same
-            current_worst = test_worst;
+        if (current_row.test(largest_remaining->size())) {
+            current_row.push(largest_remaining);
         } else {
             // Flush current row and start new one - aspect ratio would worsen
-            current_row.pop_back();
             auto [row_results, remaining_space] =
-                layoutrow<T>(current_row, current_rect);
+                layoutrow<T>(current_row.elements, current_row.rect);
             results.insert(results.end(), row_results.begin(),
                            row_results.end());
-
-            current_rect = remaining_space;
-            current_row = {largest_remaining};
+            current_row = Row<T>(remaining_space, largest_remaining);
         }
     }
 
     // Flush final row
-    if (!current_row.empty()) {
+    if (current_row.element_count() != 0) {
         auto [row_results, remaining_space] =
-            layoutrow<T>(current_row, current_rect);
+            layoutrow<T>(current_row.elements, current_row.rect);
         results.insert(results.end(), row_results.begin(), row_results.end());
-        // assert(std::abs(area(remaining_space)) < 1.0F);
     }
 
     return results;
@@ -311,7 +311,8 @@ std::vector<RenderedRect<T>> squarify(const std::vector<const T *> &children,
 /// @tparam T
 /// @param row Nodes to layout
 /// @param available_rect coordinates and available space
-/// @return
+/// @return Layouted rects in screen coordinates and remaining space after
+/// layout operation
 template <TreeNode T>
 std::pair<std::vector<RenderedRect<T>>, Rect>
 layoutrow(const std::vector<const T *> &row, const Rect &available_rect)
@@ -320,8 +321,6 @@ layoutrow(const std::vector<const T *> &row, const Rect &available_rect)
     if (row.empty()) {
         return {{}, available_rect};
     }
-
-    // assert(row_area(row) <= area(available_rect));
 
     std::vector<RenderedRect<T>> results;
     results.reserve(row.size());
