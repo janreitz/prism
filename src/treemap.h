@@ -263,13 +263,15 @@ std::vector<RenderedRect<T>> squarify(const std::vector<const T *> &children,
         return left->size() < right->size();
     };
 
-    TracyCZoneN(ctx, "Priority Queue Creation", true);
+    TracyCZoneN(ctx, "squarify Priority Queue Creation", true);
     std::priority_queue<const T *, std::vector<const T *>, decltype(cmp)>
         remaining_children(children.begin(), children.end(), cmp);
     TracyCZoneEnd(ctx);
 
+    TracyCZoneN(ctx_1, "squarify Result vector allocation", true);
     std::vector<RenderedRect<T>> results;
     results.reserve(children.size());
+    TracyCZoneEnd(ctx_1);
 
     Row<T> current_row{available_rect, remaining_children.top()};
     remaining_children.pop();
