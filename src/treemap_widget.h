@@ -164,7 +164,7 @@ bool TreeMapWidget<T>::render(const char *label, const ImVec2 &size,
                                 screen_min.y + frame.rect_.height);
 
         draw_list->AddRect(screen_min, screen_max, IM_COL32(0, 0, 0, 180), 0.0f,
-                           0, 1.0f);
+                           0, 2.0f);
     }
 
     ImGui::EndChild();
