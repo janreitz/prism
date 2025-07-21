@@ -95,7 +95,7 @@ void print_rect(const std::string &label, const Rect &rect)
 }
 
 // Helper function to print all rendered rectangles
-void print_rendered_rects(const std::vector<RenderedRect<MockTreeNode>> &rects)
+void print_rendered_rects(const std::vector<RenderRect<MockTreeNode>> &rects)
 {
     std::cout << "\n=== Rendered Rectangles ===\n";
     for (size_t i = 0; i < rects.size(); ++i) {
@@ -106,8 +106,7 @@ void print_rendered_rects(const std::vector<RenderedRect<MockTreeNode>> &rects)
 }
 
 // Helper function to check for overlaps with detailed output
-bool check_overlaps_detailed(
-    const std::vector<RenderedRect<MockTreeNode>> &rects)
+bool check_overlaps_detailed(const std::vector<RenderRect<MockTreeNode>> &rects)
 {
     std::cout << "\n=== Overlap Check ===\n";
     bool found_overlap = false;
@@ -136,7 +135,7 @@ bool check_overlaps_detailed(
 }
 
 // Helper function to check bounds with detailed output
-bool check_bounds_detailed(const std::vector<RenderedRect<MockTreeNode>> &rects,
+bool check_bounds_detailed(const std::vector<RenderRect<MockTreeNode>> &rects,
                            const Rect &bounds)
 {
     std::cout << "\n=== Bounds Check ===\n";
@@ -179,16 +178,16 @@ TEST_CASE("TreeMap Layout - Simple Case", "[layout]")
 
     auto result = layout(*root, available_rect);
 
-    print_rendered_rects(result);
+    print_rendered_rects(result.leaves);
 
     // Check for overlaps
-    REQUIRE_FALSE(check_overlaps_detailed(result));
+    REQUIRE_FALSE(check_overlaps_detailed(result.leaves));
 
     // Check bounds
-    REQUIRE_FALSE(check_bounds_detailed(result, available_rect));
+    REQUIRE_FALSE(check_bounds_detailed(result.leaves, available_rect));
 
     // Should have 2 rectangles (only leaf nodes)
-    REQUIRE(result.size() == 2);
+    REQUIRE(result.leaves.size() == 2);
 }
 
 TEST_CASE("TreeMap Layout - Three Children", "[layout]")
@@ -208,16 +207,16 @@ TEST_CASE("TreeMap Layout - Three Children", "[layout]")
 
     auto result = layout(*root, available_rect);
 
-    print_rendered_rects(result);
+    print_rendered_rects(result.leaves);
 
     // Check for overlaps
-    REQUIRE_FALSE(check_overlaps_detailed(result));
+    REQUIRE_FALSE(check_overlaps_detailed(result.leaves));
 
     // Check bounds
-    REQUIRE_FALSE(check_bounds_detailed(result, available_rect));
+    REQUIRE_FALSE(check_bounds_detailed(result.leaves, available_rect));
 
     // Should have 3 rectangles
-    REQUIRE(result.size() == 3);
+    REQUIRE(result.leaves.size() == 3);
 }
 
 TEST_CASE("TreeMap Layout - Nested Structure", "[layout]")
@@ -253,16 +252,16 @@ TEST_CASE("TreeMap Layout - Nested Structure", "[layout]")
 
     auto result = layout(*root, available_rect);
 
-    print_rendered_rects(result);
+    print_rendered_rects(result.leaves);
 
     // Check for overlaps
-    REQUIRE_FALSE(check_overlaps_detailed(result));
+    REQUIRE_FALSE(check_overlaps_detailed(result.leaves));
 
     // Check bounds
-    REQUIRE_FALSE(check_bounds_detailed(result, available_rect));
+    REQUIRE_FALSE(check_bounds_detailed(result.leaves, available_rect));
 
     // Should have 4 rectangles (only leaf nodes)
-    REQUIRE(result.size() == 4);
+    REQUIRE(result.leaves.size() == 4);
 }
 
 TEST_CASE("TreeMap Layout - Single Child", "[layout]")
@@ -280,22 +279,22 @@ TEST_CASE("TreeMap Layout - Single Child", "[layout]")
 
     auto result = layout(*root, available_rect);
 
-    print_rendered_rects(result);
+    print_rendered_rects(result.leaves);
 
     // Check for overlaps
-    REQUIRE_FALSE(check_overlaps_detailed(result));
+    REQUIRE_FALSE(check_overlaps_detailed(result.leaves));
 
     // Check bounds
-    REQUIRE_FALSE(check_bounds_detailed(result, available_rect));
+    REQUIRE_FALSE(check_bounds_detailed(result.leaves, available_rect));
 
     // Should have 1 rectangle
-    REQUIRE(result.size() == 1);
+    REQUIRE(result.leaves.size() == 1);
 
     // Should fill the entire available space
-    REQUIRE(result[0].rect_.x == 0);
-    REQUIRE(result[0].rect_.y == 0);
-    REQUIRE(result[0].rect_.width == 100);
-    REQUIRE(result[0].rect_.height == 100);
+    REQUIRE(result.leaves[0].rect_.x == 0);
+    REQUIRE(result.leaves[0].rect_.y == 0);
+    REQUIRE(result.leaves[0].rect_.width == 100);
+    REQUIRE(result.leaves[0].rect_.height == 100);
 }
 
 TEST_CASE("TreeMap Layout - Leaf Node", "[layout]")
@@ -311,20 +310,20 @@ TEST_CASE("TreeMap Layout - Leaf Node", "[layout]")
 
     auto result = layout(*root, available_rect);
 
-    print_rendered_rects(result);
+    print_rendered_rects(result.leaves);
 
     // Check for overlaps
-    REQUIRE_FALSE(check_overlaps_detailed(result));
+    REQUIRE_FALSE(check_overlaps_detailed(result.leaves));
 
     // Check bounds
-    REQUIRE_FALSE(check_bounds_detailed(result, available_rect));
+    REQUIRE_FALSE(check_bounds_detailed(result.leaves, available_rect));
 
     // Should have 1 rectangle matching the available rect
-    REQUIRE(result.size() == 1);
-    REQUIRE(result[0].rect_.x == 10.0F);
-    REQUIRE(result[0].rect_.y == 20.0F);
-    REQUIRE(result[0].rect_.width == 80.0F);
-    REQUIRE(result[0].rect_.height == 60.0F);
+    REQUIRE(result.leaves.size() == 1);
+    REQUIRE(result.leaves[0].rect_.x == 10.0F);
+    REQUIRE(result.leaves[0].rect_.y == 20.0F);
+    REQUIRE(result.leaves[0].rect_.width == 80.0F);
+    REQUIRE(result.leaves[0].rect_.height == 60.0F);
 }
 
 // ========================================
@@ -525,10 +524,10 @@ TEST_CASE("Tree Traversal Coordinate Bug", "[tree_traversal]")
         auto result = layout(*root, available);
 
         std::cout << "\nFull tree layout result:\n";
-        for (size_t i = 0; i < result.size(); ++i) {
-            std::cout << "  Rect " << i << " ('" << result[i].node_->name()
-                      << "'): ";
-            print_rect("", result[i].rect_);
+        for (size_t i = 0; i < result.leaves.size(); ++i) {
+            std::cout << "  Rect " << i << " ('"
+                      << result.leaves[i].node_->name() << "'): ";
+            print_rect("", result.leaves[i].rect_);
         }
 
         // The bug: child rectangles should be positioned within their parent's
@@ -548,7 +547,7 @@ TEST_CASE("Tree Traversal Coordinate Bug", "[tree_traversal]")
         print_rect("", dir2_space);
 
         // All of dir2's children should be within dir2's space
-        for (const auto &rendered : result) {
+        for (const auto &rendered : result.leaves) {
             if (rendered.node_->name().find("dir2_") == 0) {
                 std::cout << "Checking if " << rendered.node_->name()
                           << " is within dir2's space:\n";

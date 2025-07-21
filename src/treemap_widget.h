@@ -45,7 +45,7 @@ template <treemap::TreeNode T> class TreeMapWidget
     const T *selected_node_ = nullptr;
     const T *hovered_node_ = nullptr;
 
-    std::vector<treemap::RenderedRect<T>> rendered_rects_;
+    treemap::Layout<T> layout_;
 
     // Rendering methods
     std::vector<std::pair<const T *, treemap::Rect>>
@@ -95,14 +95,14 @@ bool TreeMapWidget<T>::render(const char *label, const ImVec2 &size,
 
     // Calculate layout and get rendered rectangles directly
     treemap::Rect available_rect{0, 0, canvas_size.x, canvas_size.y};
-    rendered_rects_ = treemap::layout(root_.get(), available_rect, parallelize);
+    layout_ = treemap::layout(root_.get(), available_rect, parallelize);
 
     ImGui::InvisibleButton("treemap_canvas", canvas_size);
 
     if (ImGui::IsItemHovered()) {
 
-        const auto *currently_hovered_node = treemap::hit_test(
-            ImGui::GetMousePos(), rendered_rects_, canvas_pos);
+        const auto *currently_hovered_node =
+            treemap::hit_test(ImGui::GetMousePos(), layout_.leaves, canvas_pos);
 
         // Only execute callbacks if hovered node changed and is currently not
         // nullptr
@@ -114,7 +114,7 @@ bool TreeMapWidget<T>::render(const char *label, const ImVec2 &size,
         hovered_node_ = currently_hovered_node;
     }
 
-    for (auto &rect : rendered_rects_) {
+    for (auto &rect : layout_.leaves) {
 
         ImU32 fill_color = coloring_strategy_
                                ? (*coloring_strategy_)(*rect.node_)
@@ -155,6 +155,16 @@ bool TreeMapWidget<T>::render(const char *label, const ImVec2 &size,
             callback(*hovered_node_);
         }
         clicked = true;
+    }
+
+    for (auto &frame : layout_.frames) {
+        const ImVec2 screen_min(canvas_pos.x + frame.rect_.x,
+                                canvas_pos.y + frame.rect_.y);
+        const ImVec2 screen_max(screen_min.x + frame.rect_.width,
+                                screen_min.y + frame.rect_.height);
+
+        draw_list->AddRect(screen_min, screen_max, IM_COL32(0, 0, 0, 180), 0.0f,
+                           0, 1.0f);
     }
 
     ImGui::EndChild();

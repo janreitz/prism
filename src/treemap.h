@@ -52,20 +52,20 @@ bool within_bounds(const Rect &rect, const Rect &bounds)
            rect.y + rect.height <= bounds.y + bounds.height;
 }
 
-template <TreeNode T> struct RenderedRect {
+template <TreeNode T> struct RenderRect {
     const T *node_;
     Rect rect_;
 
-    RenderedRect(const T *n, Rect rect) : node_(n), rect_(rect) {}
+    RenderRect(const T *n, Rect rect) : node_(n), rect_(rect) {}
 };
 
 template <TreeNode T>
-auto hit_test(ImVec2 test, const std::vector<RenderedRect<T>> &rects,
+auto hit_test(ImVec2 test, const std::vector<RenderRect<T>> &rects,
               ImVec2 offset) -> const T *
 {
     auto hovered_rect_it =
         std::find_if(rects.cbegin(), rects.cend(),
-                     [&offset, &test](const RenderedRect<T> &rect) -> bool {
+                     [&offset, &test](const RenderRect<T> &rect) -> bool {
                          const ImVec2 rect_min(offset.x + rect.rect_.x,
                                                offset.y + rect.rect_.y);
                          const ImVec2 rect_max(rect_min.x + rect.rect_.width,
@@ -82,7 +82,7 @@ auto hit_test(ImVec2 test, const std::vector<RenderedRect<T>> &rects,
 };
 
 template <TreeNode T>
-void validate_layout(const std::vector<RenderedRect<T>> &layout,
+void validate_layout(const std::vector<RenderRect<T>> &layout,
                      const Rect &available_rect)
 {
     for (size_t i = 0; i < layout.size(); i++) {
@@ -97,6 +97,11 @@ void validate_layout(const std::vector<RenderedRect<T>> &layout,
     }
 }
 
+template <typename T> struct Layout {
+    std::vector<RenderRect<T>> leaves;
+    std::vector<RenderRect<T>> frames;
+};
+
 /// @brief  Main entry point for calculating treemap layout - handles scaling
 /// relative scaling of screen coordinates/space and size of elements to place
 /// @tparam T
@@ -104,8 +109,8 @@ void validate_layout(const std::vector<RenderedRect<T>> &layout,
 /// @param available_rect
 /// @return
 template <TreeNode T>
-std::vector<RenderedRect<T>> layout(const T &root, const Rect &available_rect,
-                                    bool parallelize = false)
+Layout<T> layout(const T &root, const Rect &available_rect,
+                 bool parallelize = false)
 {
     ZoneScoped;
 
@@ -136,18 +141,20 @@ std::vector<RenderedRect<T>> layout(const T &root, const Rect &available_rect,
     // }
     // assert(error < 1.0f);
 
-    std::vector<RenderedRect<T>> layout_result;
+    Layout<T> layout_result;
     layout_tree_traversal(layout_result, root, available_rect_scaled,
                           parallelize);
 
-    // Rescale layout result to screen coordinates and reapply initial screen
-    // space offset
-    for (auto &rect : layout_result) {
+    auto rescale_rect = [&](auto &rect) -> auto & {
         rect.rect_.x = rect.rect_.x / scaling_factor + available_rect.x;
         rect.rect_.y = rect.rect_.y / scaling_factor + available_rect.y;
         rect.rect_.height /= scaling_factor;
         rect.rect_.width /= scaling_factor;
-    }
+        return rect;
+    };
+
+    std::ranges::for_each(layout_result.leaves, rescale_rect);
+    std::ranges::for_each(layout_result.frames, rescale_rect);
 
     // Validate the result
     // validate_layout(layout_result, available_rect);
@@ -156,16 +163,18 @@ std::vector<RenderedRect<T>> layout(const T &root, const Rect &available_rect,
 }
 
 template <TreeNode T>
-void layout_tree_traversal(std::vector<RenderedRect<T>> &result, const T &root,
+void layout_tree_traversal(Layout<T> &result, const T &root,
                            const Rect &available_rect, bool parallelize)
 {
     ZoneScoped;
     auto children = root.children();
     if (children.empty()) {
         // Leaf node - return single rectangle
-        result.emplace_back(&root, available_rect);
+        result.leaves.emplace_back(&root, available_rect);
         return;
     }
+
+    result.frames.emplace_back(&root, available_rect);
 
     auto child_layouts = squarify(children, available_rect);
 
@@ -183,8 +192,8 @@ void layout_tree_traversal(std::vector<RenderedRect<T>> &result, const T &root,
         // Parallel version
         // return std::transform_reduce(
         //     std::execution::par, child_layouts.begin(), child_layouts.end(),
-        //     std::vector<RenderedRect<T>>{},
-        //     [](std::vector<RenderedRect<T>> a, std::vector<RenderedRect<T>>
+        //     std::vector<RenderRect<T>>{},
+        //     [](std::vector<RenderRect<T>> a, std::vector<RenderRect<T>>
         //     b) {
         //         a.insert(a.end(), b.begin(), b.end());
         //         return a;
@@ -250,8 +259,8 @@ template <typename T> struct Row {
 
 // Core squarify algorithm - iterative implementation for single-level layout
 template <TreeNode T>
-std::vector<RenderedRect<T>> squarify(const std::vector<const T *> &children,
-                                      const Rect &available_rect)
+std::vector<RenderRect<T>> squarify(const std::vector<const T *> &children,
+                                    const Rect &available_rect)
 {
     ZoneScoped;
     if (children.empty()) {
@@ -269,7 +278,7 @@ std::vector<RenderedRect<T>> squarify(const std::vector<const T *> &children,
     TracyCZoneEnd(ctx);
 
     TracyCZoneN(ctx_1, "squarify Result vector allocation", true);
-    std::vector<RenderedRect<T>> results;
+    std::vector<RenderRect<T>> results;
     results.reserve(children.size());
     TracyCZoneEnd(ctx_1);
 
@@ -308,7 +317,7 @@ std::vector<RenderedRect<T>> squarify(const std::vector<const T *> &children,
 /// @return Layouted rects in screen coordinates and remaining space after
 /// layout operation
 template <TreeNode T>
-std::pair<std::vector<RenderedRect<T>>, Rect> layoutrow(const Row<T> &row)
+std::pair<std::vector<RenderRect<T>>, Rect> layoutrow(const Row<T> &row)
 {
     ZoneScoped;
     const auto &available_rect = row.rect;
@@ -317,7 +326,7 @@ std::pair<std::vector<RenderedRect<T>>, Rect> layoutrow(const Row<T> &row)
         return {{}, available_rect};
     }
 
-    std::vector<RenderedRect<T>> results;
+    std::vector<RenderRect<T>> results;
     results.reserve(row.element_count());
 
     // If the available rect is wider than high, "split" it by laying out
