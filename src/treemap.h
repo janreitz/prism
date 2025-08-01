@@ -13,8 +13,10 @@
 #include <vector>
 
 #include <imgui.h> // For ImVec2 -> TODO create custom vec type to avoid this dependency here
+#if TRACY_ENABLE
 #include <tracy/Tracy.hpp>
 #include <tracy/TracyC.h>
+#endif
 
 namespace treemap
 {
@@ -112,7 +114,9 @@ template <TreeNode T>
 Layout<T> layout(const T &root, const Rect &available_rect,
                  bool parallelize = false)
 {
+#if TRACY_ENABLE
     ZoneScoped;
+#endif
 
     // Remove x/y offset and scale width and height, so the area is equal to the
     // total sum of elements to be placed
@@ -166,7 +170,9 @@ template <TreeNode T>
 void layout_tree_traversal(Layout<T> &result, const T &root,
                            const Rect &available_rect, bool parallelize)
 {
+#if TRACY_ENABLE
     ZoneScoped;
+#endif
     auto children = root.children();
     if (children.empty()) {
         // Leaf node - return single rectangle
@@ -213,7 +219,9 @@ void layout_tree_traversal(Layout<T> &result, const T &root,
 float worst_aspect_ratio(float total_size, float max_element_size,
                          float min_element_size, float w)
 {
+#if TRACY_ENABLE
     ZoneScoped;
+#endif
     return std::max((w * w * max_element_size) / (total_size * total_size),
                     (total_size * total_size) / (w * w * min_element_size));
 }
@@ -223,7 +231,9 @@ template <typename T> struct Row {
         : rect(_rect), w(shorter_side(_rect)),
           max_element_size(initial_element->size())
     {
+#if TRACY_ENABLE
         ZoneScoped;
+#endif
         push(initial_element);
     }
 
@@ -262,7 +272,9 @@ template <TreeNode T>
 std::vector<RenderRect<T>> squarify(const std::vector<const T *> &children,
                                     const Rect &available_rect)
 {
+#if TRACY_ENABLE
     ZoneScoped;
+#endif
     if (children.empty()) {
         return {};
     }
@@ -272,15 +284,23 @@ std::vector<RenderRect<T>> squarify(const std::vector<const T *> &children,
         return left->size() < right->size();
     };
 
+#if TRACY_ENABLE
     TracyCZoneN(ctx, "squarify Priority Queue Creation", true);
+#endif
     std::priority_queue<const T *, std::vector<const T *>, decltype(cmp)>
         remaining_children(children.begin(), children.end(), cmp);
+#if TRACY_ENABLE
     TracyCZoneEnd(ctx);
+#endif
 
+#if TRACY_ENABLE
     TracyCZoneN(ctx_1, "squarify Result vector allocation", true);
+#endif
     std::vector<RenderRect<T>> results;
     results.reserve(children.size());
+#if TRACY_ENABLE
     TracyCZoneEnd(ctx_1);
+#endif
 
     Row<T> current_row{available_rect, remaining_children.top()};
     remaining_children.pop();
@@ -319,7 +339,9 @@ std::vector<RenderRect<T>> squarify(const std::vector<const T *> &children,
 template <TreeNode T>
 std::pair<std::vector<RenderRect<T>>, Rect> layoutrow(const Row<T> &row)
 {
+#if TRACY_ENABLE
     ZoneScoped;
+#endif
     const auto &available_rect = row.rect;
 
     if (row.element_count() == 0) {

@@ -128,6 +128,9 @@ foreach(target prism layout_tests)
 
     if(ENABLE_TRACY)
         target_link_libraries(${target} PUBLIC Tracy::TracyClient)
+        target_compile_definitions(${target} PRIVATE TRACY_ENABLE=1)
+    else()
+        target_compile_definitions(${target} PRIVATE TRACY_ENABLE=0)
     endif()
 
     if(ENABLE_PARALLEL_EXECUTION)
