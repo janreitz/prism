@@ -99,6 +99,8 @@ file(GLOB IMGUI_SOURCES
 add_executable(prism 
     src/main.cpp 
     src/filesystem_node.cpp
+    src/treemap.cpp
+    src/filesystem_view.cpp
     ${IMGUI_SOURCES} 
 )
 
@@ -116,6 +118,7 @@ enable_testing()
 add_executable(layout_tests
     tests/test_layout.cpp
     src/filesystem_node.cpp
+    src/treemap.cpp
 )
 
 target_link_libraries(layout_tests
