@@ -216,10 +216,6 @@ create_relative_time_strategy(const ModificationTimeStatistics &context)
     const auto range = context.max_modified - context.min_modified;
     const auto offset = context.min_modified;
     return [offset, range](const FileSystemNode &node) -> ImU32 {
-        if (node.is_directory()) {
-            return IM_COL32(186, 85, 211, 255); // Purple for directories
-        }
-
         const auto t =
             (static_cast<float>(node.last_modified()) - offset) / range;
 
@@ -241,7 +237,7 @@ std::function<ImU32(const FileSystemNode &)> create_balanced_extension_strategy(
     const float color_increment =
         1.0F / static_cast<float>(extension_counts.size());
     float color = 0;
-    for (const auto &[extension, count] : extension_counts) {
+    for (const auto &[extension, _] : extension_counts) {
         const float hue = (1.0F - color) * 120.0F; // 120° (green) to 0° (red)
         const float saturation = 0.8F;
         const float value = 0.9F;
