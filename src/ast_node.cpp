@@ -2,6 +2,9 @@
 #include "ast_matcher.h"
 #include "clang/AST/Decl.h"
 #include "clang/AST/DeclCXX.h"
+#include "clang/AST/Stmt.h"
+#include "clang/AST/StmtCXX.h"
+#include "clang/AST/Expr.h"
 #include "clang/Basic/SourceManager.h"
 #include <algorithm>
 
@@ -135,14 +138,15 @@ unsigned ASTNode::column_number() const
 const NodeMetrics& ASTNode::metrics() const
 {
     if (!cached_metrics_.has_value()) {
-        // Compute appropriate metrics based on node type
+        // We need the ASTContext to compute real metrics, but don't have access here
+        // For now, use compute basic metrics based on node type
         ASTNodeType type = node_type();
         switch (type) {
             case ASTNodeType::Function:
-                cached_metrics_ = FunctionMetrics{5, 2, 3, 10}; // TODO: compute from clang_decl_
+                cached_metrics_ = compute_function_metrics();
                 break;
             case ASTNodeType::Class:
-                cached_metrics_ = ClassMetrics{20, 5, 3, 2, 3}; // TODO: compute from clang_decl_
+                cached_metrics_ = compute_class_metrics();
                 break;
             case ASTNodeType::Namespace:
                 cached_metrics_ = NamespaceMetrics{1, static_cast<size_t>(children_.size())};
@@ -156,6 +160,102 @@ const NodeMetrics& ASTNode::metrics() const
         }
     }
     return cached_metrics_.value();
+}
+
+FunctionMetrics ASTNode::compute_function_metrics() const
+{
+    FunctionMetrics metrics;
+    
+    if (!clang_decl_ || !isa<FunctionDecl>(clang_decl_)) {
+        return metrics; // Default values
+    }
+    
+    const auto* func_decl = dyn_cast<FunctionDecl>(clang_decl_);
+    
+    // Parameter count
+    metrics.parameter_count = func_decl->getNumParams();
+    
+    // Statement count
+    if (func_decl->hasBody()) {
+        const Stmt* body = func_decl->getBody();
+        metrics.statement_count = count_statements(body);
+        
+        // Basic cyclomatic complexity (1 + decision points)
+        metrics.cyclomatic_complexity = 1 + count_decision_points(body);
+    } else {
+        metrics.statement_count = 0;
+        metrics.cyclomatic_complexity = 1;
+    }
+    
+    // Use statement count as a proxy for lines of code for now
+    metrics.lines_of_code = std::max(1ul, metrics.statement_count);
+    
+    return metrics;
+}
+
+ClassMetrics ASTNode::compute_class_metrics() const
+{
+    ClassMetrics metrics;
+    
+    if (!clang_decl_ || !isa<CXXRecordDecl>(clang_decl_)) {
+        return metrics; // Default values
+    }
+    
+    const auto* class_decl = dyn_cast<CXXRecordDecl>(clang_decl_);
+    
+    // Count members and methods
+    for (const auto* decl : class_decl->decls()) {
+        if (isa<CXXMethodDecl>(decl)) {
+            metrics.method_count++;
+            if (decl->getAccess() == AS_public) {
+                metrics.public_member_count++;
+            } else if (decl->getAccess() == AS_private) {
+                metrics.private_member_count++;
+            }
+        } else if (isa<FieldDecl>(decl)) {
+            metrics.member_count++;
+        }
+    }
+    
+    // Estimate lines of code based on members and methods
+    metrics.lines_of_code = metrics.member_count + metrics.method_count * 3;
+    
+    return metrics;
+}
+
+size_t ASTNode::count_statements(const clang::Stmt* stmt) const
+{
+    if (!stmt) return 0;
+    
+    size_t count = 1; // Count this statement
+    
+    // Recursively count child statements
+    for (const auto* child : stmt->children()) {
+        count += count_statements(child);
+    }
+    
+    return count;
+}
+
+size_t ASTNode::count_decision_points(const clang::Stmt* stmt) const
+{
+    if (!stmt) return 0;
+    
+    size_t count = 0;
+    
+    // Count decision points (if, while, for, switch, etc.)
+    if (isa<IfStmt>(stmt) || isa<WhileStmt>(stmt) || 
+        isa<ForStmt>(stmt) || isa<SwitchStmt>(stmt) ||
+        isa<ConditionalOperator>(stmt)) {
+        count++;
+    }
+    
+    // Recursively count in child statements
+    for (const auto* child : stmt->children()) {
+        count += count_decision_points(child);
+    }
+    
+    return count;
 }
 
 std::unique_ptr<ASTNode> create_node_from_decl(const Decl *decl,

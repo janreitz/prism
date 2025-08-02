@@ -136,6 +136,12 @@ class ASTNode
 
     // Cache computed metrics (computed on first access)
     mutable std::optional<NodeMetrics> cached_metrics_;
+
+    FunctionMetrics compute_function_metrics() const;
+    ClassMetrics compute_class_metrics() const;
+
+    size_t count_statements(const clang::Stmt *stmt) const;
+    size_t count_decision_points(const clang::Stmt *stmt) const;
 };
 
 std::unique_ptr<ASTNode> create_node_from_decl(const clang::Decl *decl,
