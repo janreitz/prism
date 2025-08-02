@@ -30,7 +30,8 @@ void ASTMatcherCallback::run(const MatchFinder::MatchResult &Result)
 
     // Ensure we have a root node
     if (!result_.root) {
-        result_.root = std::make_unique<ASTNode>(nullptr); // nullptr represents TranslationUnit
+        result_.root = std::make_unique<ASTNode>(
+            nullptr); // nullptr represents TranslationUnit
         decl_to_node_[nullptr] = result_.root.get(); // Map translation unit
     }
 
@@ -51,13 +52,76 @@ void ASTMatcherCallback::run(const MatchFinder::MatchResult &Result)
     }
 
     if (matched_decl) {
-        // Create the matched node using the global function
+        if (decl_to_node_.find(matched_decl) != decl_to_node_.end()) {
+            return;
+        }
+
         auto node = create_node_from_decl(matched_decl, context);
         if (node) {
-            result_.root->add_child(std::move(node));
+            // Track this node to avoid duplicates
+            ASTNode *node_ptr = node.get();
+            decl_to_node_[matched_decl] = node_ptr;
+
+            // Find or create the proper parent in the hierarchy
+            ASTNode *parent = find_or_create_parent(matched_decl, context);
+            parent->add_child(std::move(node));
         }
         result_.nodes_processed++;
     }
+}
+
+ASTNode *ASTMatcherCallback::find_or_create_parent(const clang::Decl *decl,
+                                                   clang::ASTContext *context)
+{
+    // Walk up the parent chain to find the proper hierarchical parent
+    const clang::DeclContext *parent_context = decl->getDeclContext();
+
+    while (parent_context) {
+        // Convert DeclContext back to Decl if it represents a declaration
+        const clang::Decl *parent_decl = nullptr;
+
+        if (const auto *ns_decl =
+                dyn_cast<clang::NamespaceDecl>(parent_context)) {
+            parent_decl = ns_decl;
+        } else if (const auto *class_decl =
+                       dyn_cast<clang::CXXRecordDecl>(parent_context)) {
+            parent_decl = class_decl;
+        } else if (const auto *func_decl =
+                       dyn_cast<clang::FunctionDecl>(parent_context)) {
+            parent_decl = func_decl;
+        } else if (isa<clang::TranslationUnitDecl>(parent_context)) {
+            // Reached the translation unit - use root
+            return result_.root.get();
+        }
+
+        if (parent_decl) {
+            // Check if we already have a node for this parent
+            auto it = decl_to_node_.find(parent_decl);
+            if (it != decl_to_node_.end()) {
+                return it->second;
+            }
+
+            // Create parent node if it doesn't exist
+            auto parent_node = create_node_from_decl(parent_decl, context);
+            if (parent_node) {
+                ASTNode *parent_ptr = parent_node.get();
+                decl_to_node_[parent_decl] = parent_ptr;
+
+                // Recursively find the parent's parent
+                ASTNode *grandparent =
+                    find_or_create_parent(parent_decl, context);
+                grandparent->add_child(std::move(parent_node));
+
+                return parent_ptr;
+            }
+        }
+
+        // Move up the hierarchy
+        parent_context = parent_context->getParent();
+    }
+
+    // Fallback to root if no proper parent found
+    return result_.root.get();
 }
 
 ASTAnalysisResult analyze_with_matcher(const std::string &source_code,
@@ -69,11 +133,11 @@ ASTAnalysisResult analyze_with_matcher(const std::string &source_code,
     try {
         // Create ASTUnit to keep the AST alive
         std::vector<std::string> args = {"-std=c++17"};
-        
+
         // Parse source code into AST using ASTUnit - this keeps the AST alive
         result.ast_unit = clang::tooling::buildASTFromCodeWithArgs(
             source_code, args, filename);
-            
+
         if (!result.ast_unit) {
             result.errors.push_back(
                 ASTAnalysisError{"Failed to parse source code", filename});
@@ -82,7 +146,7 @@ ASTAnalysisResult analyze_with_matcher(const std::string &source_code,
 
         // Get the ASTContext from the unit
         ASTContext &context = result.ast_unit->getASTContext();
-        
+
         // Create a MatchFinder and callback
         clang::ast_matchers::MatchFinder finder;
         ASTMatcherCallback callback(result);
@@ -116,7 +180,7 @@ ASTAnalysisResult analyze_with_matcher(const std::string &source_code,
 
         // Run the matcher on the AST
         finder.matchAST(context);
-        
+
         // Ensure we have a root node
         if (!result.root) {
             result.root = std::make_unique<ASTNode>(nullptr);
