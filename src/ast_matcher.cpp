@@ -9,6 +9,7 @@
 #include "clang/ASTMatchers/ASTMatchers.h"
 #include "clang/Basic/SourceManager.h"
 #include "clang/Frontend/ASTConsumers.h"
+#include "clang/Frontend/ASTUnit.h"
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Frontend/FrontendActions.h"
 #include "clang/Tooling/Tooling.h"
@@ -66,6 +67,22 @@ ASTAnalysisResult analyze_with_matcher(const std::string &source_code,
     ASTAnalysisResult result;
 
     try {
+        // Create ASTUnit to keep the AST alive
+        std::vector<std::string> args = {"-std=c++17"};
+        
+        // Parse source code into AST using ASTUnit - this keeps the AST alive
+        result.ast_unit = clang::tooling::buildASTFromCodeWithArgs(
+            source_code, args, filename);
+            
+        if (!result.ast_unit) {
+            result.errors.push_back(
+                ASTAnalysisError{"Failed to parse source code", filename});
+            return result;
+        }
+
+        // Get the ASTContext from the unit
+        ASTContext &context = result.ast_unit->getASTContext();
+        
         // Create a MatchFinder and callback
         clang::ast_matchers::MatchFinder finder;
         ASTMatcherCallback callback(result);
@@ -97,21 +114,12 @@ ASTAnalysisResult analyze_with_matcher(const std::string &source_code,
             finder.addMatcher(functionDecl().bind("function"), &callback);
         }
 
-        // Run the analysis
-        std::vector<std::string> args = {"-std=c++17"};
-
-        if (clang::tooling::runToolOnCodeWithArgs(
-                clang::tooling::newFrontendActionFactory(&finder)->create(),
-                source_code, args, filename)) {
-            // Analysis succeeded
-            if (!result.root) {
-                // Create an empty root if no matches were found
-                result.root = std::make_unique<ASTNode>(nullptr);
-            }
-        } else {
-            // Analysis failed
-            result.errors.push_back(
-                ASTAnalysisError{"Failed to analyze source code", filename});
+        // Run the matcher on the AST
+        finder.matchAST(context);
+        
+        // Ensure we have a root node
+        if (!result.root) {
+            result.root = std::make_unique<ASTNode>(nullptr);
         }
 
     } catch (const std::exception &e) {

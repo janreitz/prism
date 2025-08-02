@@ -14,6 +14,7 @@
 namespace clang
 {
 class ASTContext;
+class ASTUnit;
 class Decl;
 class FunctionDecl;
 class CXXRecordDecl;
@@ -39,7 +40,8 @@ struct FunctionMetrics {
     float size() const
     {
         // For functions, size is based on complexity and length
-        float computed = static_cast<float>(lines_of_code + cyclomatic_complexity * 2);
+        float computed =
+            static_cast<float>(lines_of_code + cyclomatic_complexity * 2);
         return std::max(computed, 1.0f);
     }
 };
@@ -54,7 +56,8 @@ struct ClassMetrics {
     float size() const
     {
         // For classes, size is based on number of members and methods
-        float computed = static_cast<float>(lines_of_code + member_count * 3 + method_count * 2);
+        float computed = static_cast<float>(lines_of_code + member_count * 3 +
+                                            method_count * 2);
         return std::max(computed, 1.0f);
     }
 };
@@ -73,7 +76,7 @@ struct NamespaceMetrics {
 
 struct VariableMetrics {
     size_t lines_of_code = 1; // Variables are typically single line
-    
+
     float size() const
     {
         return 1.0f; // Variables have minimal individual impact
@@ -82,14 +85,16 @@ struct VariableMetrics {
 
 struct DefaultMetrics {
     size_t lines_of_code = 1;
-    
+
     float size() const
     {
         return std::max(static_cast<float>(lines_of_code), 1.0f);
     }
 };
 
-using NodeMetrics = std::variant<FunctionMetrics, ClassMetrics, NamespaceMetrics, VariableMetrics, DefaultMetrics>;
+using NodeMetrics =
+    std::variant<FunctionMetrics, ClassMetrics, NamespaceMetrics,
+                 VariableMetrics, DefaultMetrics>;
 
 struct ASTAnalysisError {
     std::string what;
@@ -111,13 +116,12 @@ class ASTNode
     ASTNodeType node_type() const;
     const clang::Decl *clang_decl() const { return clang_decl_; }
 
-    // Location information
     std::string file_path() const;
     unsigned line_number() const;
     unsigned column_number() const;
 
     // Get type-specific metrics
-    const NodeMetrics& metrics() const;
+    const NodeMetrics &metrics() const;
 
     // Utility functions
     std::string type_string() const;
@@ -126,8 +130,10 @@ class ASTNode
   private:
     std::vector<std::unique_ptr<ASTNode>> children_;
 
+    // Single source of truth: everything derived from clang_decl_
+    // IMPORTANT: clang_decl_ is only valid while the owning ASTUnit is alive
     const clang::Decl *clang_decl_;
-    
+
     // Cache computed metrics (computed on first access)
     mutable std::optional<NodeMetrics> cached_metrics_;
 };
@@ -136,7 +142,7 @@ std::unique_ptr<ASTNode> create_node_from_decl(const clang::Decl *decl,
                                                clang::ASTContext *context);
 
 NodeMetrics calculate_metrics(const clang::Decl *decl,
-                               clang::ASTContext *context);
+                              clang::ASTContext *context);
 
 // Analysis result with error tracking (similar to AnalysisResult)
 struct ASTAnalysisResult {
@@ -155,6 +161,9 @@ struct ASTAnalysisResult {
     size_t min_size = std::numeric_limits<size_t>::max();
     size_t max_size = 0;
     size_t total_size = 0;
+
+    // CRITICAL: Keep the AST alive so clang_decl_ pointers remain valid
+    std::unique_ptr<clang::ASTUnit> ast_unit;
 
     bool has_errors() const { return !errors.empty(); }
     double success_rate() const
