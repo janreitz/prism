@@ -94,8 +94,15 @@ ASTNodeType ASTNode::node_type() const
 
 std::string ASTNode::get_qualified_name() const
 {
-    // TODO: Build qualified name by traversing up the parent chain
-    return name();
+    if (!clang_decl_) {
+        return "TranslationUnit";
+    }
+    
+    if (const auto *named_decl = dyn_cast<NamedDecl>(clang_decl_)) {
+        return named_decl->getQualifiedNameAsString();
+    } else {
+        return name();
+    }
 }
 
 std::string ASTNode::file_path() const

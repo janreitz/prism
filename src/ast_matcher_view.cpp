@@ -405,18 +405,20 @@ void ASTMatcherView::register_treemap_callbacks()
     treemap_->add_on_node_hover([this](const ASTNode &node) {
         size_t loc = 0;
         size_t complexity = 1;
-        
+
         // Extract metrics from variant
-        std::visit([&loc, &complexity](const auto& metrics) {
-            loc = metrics.lines_of_code;
-            if constexpr (requires { metrics.cyclomatic_complexity; }) {
-                complexity = metrics.cyclomatic_complexity;
-            }
-        }, node.metrics());
-        
-        hovered_info_ = node.type_string() + ": " + node.name() +
-                       " (LOC: " + std::to_string(loc) +
-                       ", Complexity: " + std::to_string(complexity) + ")";
+        std::visit(
+            [&loc, &complexity](const auto &metrics) {
+                loc = metrics.lines_of_code;
+                if constexpr (requires { metrics.cyclomatic_complexity; }) {
+                    complexity = metrics.cyclomatic_complexity;
+                }
+            },
+            node.metrics());
+
+        hovered_info_ = node.type_string() + ": " + node.get_qualified_name() +
+                        " (LOC: " + std::to_string(loc) +
+                        ", Complexity: " + std::to_string(complexity) + ")";
     });
 
     treemap_->add_on_node_click([this](const ASTNode &node) {
