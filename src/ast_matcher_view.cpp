@@ -1,4 +1,6 @@
 #include "ast_matcher_view.h"
+#include "clang/Basic/SourceLocation.h"
+#include "clang/Basic/SourceManager.h"
 #include <cstring>
 #include <iostream>
 
@@ -264,7 +266,6 @@ void ASTMatcherView::render_treemap()
 void ASTMatcherView::render_interactive_info()
 {
     ImGui::Text("%s", hovered_info_.c_str());
-    ImGui::Text("%s", selected_info_.c_str());
 }
 
 void ASTMatcherView::render_statistics()
@@ -307,18 +308,64 @@ void ASTMatcherView::render_match_results()
 {
     ImGui::Text("Current Matcher: %s", current_matcher_.c_str());
 
-    // TODO: Add table view of matched nodes with details
-    if (ImGui::TreeNode("Match Details")) {
-        ImGui::Text("Matched nodes will be listed here");
-        ImGui::Text("- Node type, location, metrics");
-        ImGui::Text("- Click to highlight in treemap");
-        ImGui::TreePop();
+    if (selected_node_) {
+        ImGui::Separator();
+        ImGui::Text("Selected Node Details");
+        
+        // Basic info
+        ImGui::Text("Name: %s", selected_node_->get_qualified_name().c_str());
+        ImGui::Text("Type: %s", selected_node_->type_string().c_str());
+        ImGui::Text("Size: %.1f", selected_node_->size());
+        
+        // Detailed metrics based on node type
+        std::visit([this](const auto& metrics) {
+            if constexpr (std::is_same_v<std::decay_t<decltype(metrics)>, FunctionMetrics>) {
+                ImGui::Text("Function Metrics:");
+                ImGui::Text("  Lines of Code: %zu", metrics.lines_of_code);
+                ImGui::Text("  Statement Count: %zu", metrics.statement_count);
+                ImGui::Text("  Parameter Count: %zu", metrics.parameter_count);
+                ImGui::Text("  Cyclomatic Complexity: %zu", metrics.cyclomatic_complexity);
+            } else if constexpr (std::is_same_v<std::decay_t<decltype(metrics)>, ClassMetrics>) {
+                ImGui::Text("Class Metrics:");
+                ImGui::Text("  Lines of Code: %zu", metrics.lines_of_code);
+                ImGui::Text("  Total Members: %zu", metrics.member_count);
+                ImGui::Text("  Methods: %zu", metrics.method_count);
+                ImGui::Text("  Public Members: %zu", metrics.public_member_count);
+                ImGui::Text("  Private Members: %zu", metrics.private_member_count);
+            } else if constexpr (std::is_same_v<std::decay_t<decltype(metrics)>, NamespaceMetrics>) {
+                ImGui::Text("Namespace Metrics:");
+                ImGui::Text("  Lines of Code: %zu", metrics.lines_of_code);
+                ImGui::Text("  Child Count: %zu", metrics.child_count);
+            } else if constexpr (std::is_same_v<std::decay_t<decltype(metrics)>, VariableMetrics>) {
+                ImGui::Text("Variable Metrics:");
+                ImGui::Text("  Lines of Code: %zu", metrics.lines_of_code);
+            } else {
+                ImGui::Text("Default Metrics:");
+                ImGui::Text("  Lines of Code: %zu", metrics.lines_of_code);
+            }
+        }, selected_node_->metrics());
+        
+        // Location info
+        clang::SourceLocation loc = selected_node_->source_location();
+        if (loc.isValid() && analysis_result_.ast_unit) {
+            clang::SourceManager &sm = analysis_result_.ast_unit->getASTContext().getSourceManager();
+            std::string filename = sm.getFilename(loc).str();
+            if (filename.empty()) filename = "<stdin>";
+            unsigned line = sm.getExpansionLineNumber(loc);
+            unsigned column = sm.getExpansionColumnNumber(loc);
+            ImGui::Text("Location: %s:%u:%u", filename.c_str(), line, column);
+        } else {
+            ImGui::Text("Location: <unknown>");
+        }
+    } else {
+        ImGui::Text("Click on a node in the treemap to see detailed information");
     }
 }
 
 void ASTMatcherView::refresh_analysis()
 {
     error_message_.clear();
+    selected_node_ = nullptr; // Clear selection on new analysis
 
     try {
         analysis_result_ =
@@ -343,6 +390,7 @@ void ASTMatcherView::refresh_analysis()
 bool ASTMatcherView::apply_matcher_to_source()
 {
     error_message_.clear();
+    selected_node_ = nullptr; // Clear selection on new analysis
 
     try {
         std::cout << "Applying matcher: " << current_matcher_ << std::endl;
@@ -422,10 +470,8 @@ void ASTMatcherView::register_treemap_callbacks()
     });
 
     treemap_->add_on_node_click([this](const ASTNode &node) {
-        selected_info_ = "Selected " + node.type_string() + ": " +
-                         node.get_qualified_name() +
-                         " (Size: " + std::to_string(node.size()) + ")";
-        std::cout << "Clicked AST node: " << node.name() << " ("
+        selected_node_ = &node;
+        std::cout << "Selected AST node: " << node.get_qualified_name() << " ("
                   << node.type_string() << ")" << std::endl;
     });
 }

@@ -108,31 +108,12 @@ std::string ASTNode::get_qualified_name() const
     }
 }
 
-std::string ASTNode::file_path() const
+clang::SourceLocation ASTNode::source_location() const
 {
     if (!clang_decl_)
-        return "";
-
-    // TODO: Extract from SourceManager when available
-    return "source.cpp";
-}
-
-unsigned ASTNode::line_number() const
-{
-    if (!clang_decl_)
-        return 0;
-
-    // TODO: Extract from SourceManager when available
-    return 1;
-}
-
-unsigned ASTNode::column_number() const
-{
-    if (!clang_decl_)
-        return 0;
-
-    // TODO: Extract from SourceManager when available
-    return 1;
+        return clang::SourceLocation(); // Invalid location
+    
+    return clang_decl_->getLocation();
 }
 
 const NodeMetrics& ASTNode::metrics() const

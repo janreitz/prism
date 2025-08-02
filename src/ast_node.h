@@ -116,9 +116,8 @@ class ASTNode
     ASTNodeType node_type() const;
     const clang::Decl *clang_decl() const { return clang_decl_; }
 
-    std::string file_path() const;
-    unsigned line_number() const;
-    unsigned column_number() const;
+    // Source location (to be processed by view layer with SourceManager)
+    clang::SourceLocation source_location() const;
 
     // Get type-specific metrics
     const NodeMetrics &metrics() const;

@@ -53,7 +53,7 @@ private:
     
     // Interactive state
     std::string hovered_info_ = "Hover over an AST node to see details";
-    std::string selected_info_ = "Click on an AST node to select it";
+    const ASTNode* selected_node_ = nullptr;
     
     // Internal methods
     void render_source_input();
