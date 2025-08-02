@@ -61,6 +61,16 @@ FetchContent_MakeAvailable(imgui)
 find_package(OpenGL REQUIRED)
 find_package(TBB QUIET)
 
+# Find LLVM and Clang
+find_package(LLVM REQUIRED CONFIG)
+find_package(Clang REQUIRED CONFIG)
+
+message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
+message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
+
+# Set up LLVM with minimal components
+llvm_map_components_to_libnames(llvm_libs support core)
+
 if(TBB_FOUND)
     message(STATUS "TBB found - enabling parallel execution")
     set(ENABLE_PARALLEL_EXECUTION ON)
@@ -79,6 +89,8 @@ include_directories(
     third_party/glm-master
     third_party/stb
     ${ASSIMP_INCLUDE_DIRS}
+    ${LLVM_INCLUDE_DIRS}
+    ${CLANG_INCLUDE_DIRS}
 )
 
 # GLFW Setup
@@ -101,6 +113,9 @@ add_executable(prism
     src/filesystem_node.cpp
     src/treemap.cpp
     src/filesystem_view.cpp
+    src/ast_node.cpp
+    src/ast_matcher.cpp
+    src/ast_matcher_view.cpp
     ${IMGUI_SOURCES} 
 )
 
@@ -109,6 +124,11 @@ target_link_libraries(prism
         glad
         glfw
         OpenGL::GL
+        ${llvm_libs}
+        clangAST
+        clangBasic
+        clangASTMatchers
+        clangTooling
 )
 
 # Enable testing

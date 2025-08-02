@@ -1,3 +1,4 @@
+#include "ast_matcher_view.h"
 #include "filesystem_view.h"
 #include <GLFW/glfw3.h>
 #include <imgui.h>
@@ -45,11 +46,16 @@ int main()
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init(glsl_version);
 
+    // AST analysis is now handled by ASTMatcherView
+
+    // Application state
     bool show_filesystem_view = true;
+    bool show_ast_matcher_view = true;
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
     // Initialize views
     FilesystemView filesystem_view;
+    ASTMatcherView ast_matcher_view;
 
     while (!glfwWindowShouldClose(window)) {
 #if TRACY_ENABLE
@@ -72,6 +78,7 @@ int main()
             ImGui::Separator();
 
             ImGui::Checkbox("Filesystem View", &show_filesystem_view);
+            ImGui::Checkbox("AST Matcher View", &show_ast_matcher_view);
 
             ImGui::ColorEdit3("clear color",
                               reinterpret_cast<float *>(&clear_color));
@@ -84,6 +91,10 @@ int main()
         // Render views
         if (show_filesystem_view) {
             show_filesystem_view = filesystem_view.render();
+        }
+
+        if (show_ast_matcher_view) {
+            show_ast_matcher_view = ast_matcher_view.render();
         }
 
         ImGui::Render();
