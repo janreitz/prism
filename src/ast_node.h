@@ -20,6 +20,8 @@ class FunctionDecl;
 class CXXRecordDecl;
 class VarDecl;
 class Stmt;
+class SourceLocation;
+class SourceManager;
 } // namespace clang
 
 enum class ASTNodeType {
@@ -104,7 +106,8 @@ struct ASTAnalysisError {
 class ASTNode
 {
   public:
-    explicit ASTNode(const clang::Decl *decl = nullptr);
+    explicit ASTNode(const clang::Decl *decl = nullptr,
+                     clang::ASTContext *context = nullptr);
 
     void add_child(std::unique_ptr<ASTNode> child);
 
@@ -118,6 +121,11 @@ class ASTNode
 
     // Source location (to be processed by view layer with SourceManager)
     clang::SourceLocation source_location() const;
+
+    // Template instantiation analysis
+    bool is_template_instantiation() const;
+    clang::SourceLocation template_definition_location() const;
+    std::string template_instantiation_info() const;
 
     // Get type-specific metrics
     const NodeMetrics &metrics() const;
@@ -133,6 +141,10 @@ class ASTNode
     // IMPORTANT: clang_decl_ is only valid while the owning ASTUnit is alive
     const clang::Decl *clang_decl_;
 
+    // Cache lines of code (computed once during construction for fast size()
+    // calls)
+    size_t locs_;
+
     // Cache computed metrics (computed on first access)
     mutable std::optional<NodeMetrics> cached_metrics_;
 
@@ -145,6 +157,9 @@ class ASTNode
 
 std::unique_ptr<ASTNode> create_node_from_decl(const clang::Decl *decl,
                                                clang::ASTContext *context);
+
+size_t calculate_lines_of_code(const clang::Decl *decl,
+                               clang::SourceManager *sm);
 
 NodeMetrics calculate_metrics(const clang::Decl *decl,
                               clang::ASTContext *context);

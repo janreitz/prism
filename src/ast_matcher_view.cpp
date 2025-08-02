@@ -345,17 +345,63 @@ void ASTMatcherView::render_match_results()
             }
         }, selected_node_->metrics());
         
-        // Location info
-        clang::SourceLocation loc = selected_node_->source_location();
-        if (loc.isValid() && analysis_result_.ast_unit) {
-            clang::SourceManager &sm = analysis_result_.ast_unit->getASTContext().getSourceManager();
-            std::string filename = sm.getFilename(loc).str();
-            if (filename.empty()) filename = "<stdin>";
-            unsigned line = sm.getExpansionLineNumber(loc);
-            unsigned column = sm.getExpansionColumnNumber(loc);
-            ImGui::Text("Location: %s:%u:%u", filename.c_str(), line, column);
+        // Template instantiation info
+        if (selected_node_->is_template_instantiation()) {
+            ImGui::Separator();
+            ImGui::Text("Template Instantiation Details:");
+            ImGui::Text("Type: %s", selected_node_->template_instantiation_info().c_str());
+            
+            // Debug: Show both locations to see if they're actually different
+            clang::SourceLocation inst_loc = selected_node_->source_location();
+            clang::SourceLocation def_loc = selected_node_->template_definition_location();
+            
+            ImGui::Text("Debug: inst_loc valid=%s, def_loc valid=%s", 
+                       inst_loc.isValid() ? "yes" : "no",
+                       def_loc.isValid() ? "yes" : "no");
+            
+            // Debug: Show raw location pointers to see if they're actually the same
+            if (analysis_result_.ast_unit) {
+                clang::SourceManager &sm = analysis_result_.ast_unit->getASTContext().getSourceManager();
+                if (inst_loc.isValid() && def_loc.isValid()) {
+                    unsigned inst_raw = inst_loc.getRawEncoding();
+                    unsigned def_raw = def_loc.getRawEncoding();
+                    ImGui::Text("Debug: inst_raw=%u, def_raw=%u, same=%s", 
+                               inst_raw, def_raw, (inst_raw == def_raw) ? "YES" : "NO");
+                }
+            }
+            
+            // Instantiation location
+            if (inst_loc.isValid() && analysis_result_.ast_unit) {
+                clang::SourceManager &sm = analysis_result_.ast_unit->getASTContext().getSourceManager();
+                std::string inst_filename = sm.getFilename(inst_loc).str();
+                if (inst_filename.empty()) inst_filename = "<stdin>";
+                unsigned inst_line = sm.getExpansionLineNumber(inst_loc);
+                unsigned inst_column = sm.getExpansionColumnNumber(inst_loc);
+                ImGui::Text("Instantiation: %s:%u:%u", inst_filename.c_str(), inst_line, inst_column);
+            }
+            
+            // Template definition location
+            if (def_loc.isValid() && analysis_result_.ast_unit) {
+                clang::SourceManager &sm = analysis_result_.ast_unit->getASTContext().getSourceManager();
+                std::string def_filename = sm.getFilename(def_loc).str();
+                if (def_filename.empty()) def_filename = "<stdin>";
+                unsigned def_line = sm.getExpansionLineNumber(def_loc);
+                unsigned def_column = sm.getExpansionColumnNumber(def_loc);
+                ImGui::Text("Definition: %s:%u:%u", def_filename.c_str(), def_line, def_column);
+            }
         } else {
-            ImGui::Text("Location: <unknown>");
+            // Regular location info for non-templates
+            clang::SourceLocation loc = selected_node_->source_location();
+            if (loc.isValid() && analysis_result_.ast_unit) {
+                clang::SourceManager &sm = analysis_result_.ast_unit->getASTContext().getSourceManager();
+                std::string filename = sm.getFilename(loc).str();
+                if (filename.empty()) filename = "<stdin>";
+                unsigned line = sm.getExpansionLineNumber(loc);
+                unsigned column = sm.getExpansionColumnNumber(loc);
+                ImGui::Text("Location: %s:%u:%u", filename.c_str(), line, column);
+            } else {
+                ImGui::Text("Location: <unknown>");
+            }
         }
     } else {
         ImGui::Text("Click on a node in the treemap to see detailed information");

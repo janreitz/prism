@@ -97,6 +97,10 @@ bool TreeMapWidget<T>::render(const char *label, const ImVec2 &size,
     ImVec2 canvas_size = ImGui::GetContentRegionAvail();
     ImDrawList *draw_list = ImGui::GetWindowDrawList();
 
+    // Ensure minimum canvas size to prevent zero-sized InvisibleButton
+    canvas_size.x = std::max(canvas_size.x, 10.0f);
+    canvas_size.y = std::max(canvas_size.y, 10.0f);
+
     // Calculate layout and get rendered rectangles directly
     treemap::Rect available_rect{0, 0, canvas_size.x, canvas_size.y};
     layout_ = treemap::layout(root_.get(), available_rect, parallelize);

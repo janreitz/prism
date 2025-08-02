@@ -31,7 +31,7 @@ void ASTMatcherCallback::run(const MatchFinder::MatchResult &Result)
     // Ensure we have a root node
     if (!result_.root) {
         result_.root = std::make_unique<ASTNode>(
-            nullptr); // nullptr represents TranslationUnit
+            nullptr, context); // nullptr represents TranslationUnit
         decl_to_node_[nullptr] = result_.root.get(); // Map translation unit
     }
 
@@ -56,16 +56,22 @@ void ASTMatcherCallback::run(const MatchFinder::MatchResult &Result)
             return;
         }
 
-        auto node = create_node_from_decl(matched_decl, context);
-        if (node) {
-            // Track this node to avoid duplicates
-            ASTNode *node_ptr = node.get();
-            decl_to_node_[matched_decl] = node_ptr;
-
-            // Find or create the proper parent in the hierarchy
-            ASTNode *parent = find_or_create_parent(matched_decl, context);
-            parent->add_child(std::move(node));
+        // Create a temporary node to check if it's a template instantiation
+        auto temp_node = std::make_unique<ASTNode>(matched_decl, context);
+        
+        // Only keep template instantiations, skip definitions
+        if (!temp_node->is_template_instantiation()) {
+            return;
         }
+
+        // Track this node to avoid duplicates
+        ASTNode *node_ptr = temp_node.get();
+        decl_to_node_[matched_decl] = node_ptr;
+
+        // Find or create the proper parent in the hierarchy
+        ASTNode *parent = find_or_create_parent(matched_decl, context);
+        parent->add_child(std::move(temp_node));
+        
         result_.nodes_processed++;
     }
 }
@@ -183,7 +189,7 @@ ASTAnalysisResult analyze_with_matcher(const std::string &source_code,
 
         // Ensure we have a root node
         if (!result.root) {
-            result.root = std::make_unique<ASTNode>(nullptr);
+            result.root = std::make_unique<ASTNode>(nullptr, &context);
         }
 
     } catch (const std::exception &e) {
