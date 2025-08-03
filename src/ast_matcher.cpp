@@ -13,14 +13,12 @@
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Frontend/FrontendActions.h"
 #include "clang/Tooling/Tooling.h"
-#include "llvm/Support/raw_ostream.h"
-#include <iostream>
 
 using namespace clang;
 using namespace clang::ast_matchers;
 
 ASTMatcherCallback::ASTMatcherCallback(ASTAnalysisResult &result)
-    : analysis_result_(result), current_matcher_name_("unknown")
+    : analysis_result_(result)
 {
 }
 
@@ -135,66 +133,23 @@ ASTNode *ASTMatcherCallback::find_or_create_parent(const clang::Decl *decl,
     return analysis_result_.root.get();
 }
 
-ASTAnalysisResult analyze_with_matcher(const std::string &source_code,
-                                       const std::string &matcher_expression,
-                                       const std::string &filename)
+ASTAnalysisResult
+analyze_with_matcher(clang::ASTContext &ctx,
+                     const clang::ast_matchers::DeclarationMatcher &matcher,
+                     const std::string &filename)
 {
     ASTAnalysisResult result;
 
     try {
-        // Create ASTUnit to keep the AST alive
-        std::vector<std::string> args = {"-std=c++17"};
-
-        // Parse source code into AST using ASTUnit - this keeps the AST alive
-        result.ast_unit = clang::tooling::buildASTFromCodeWithArgs(
-            source_code, args, filename);
-
-        if (!result.ast_unit) {
-            result.errors.push_back(
-                ASTAnalysisError{"Failed to parse source code", filename});
-            return result;
-        }
-
-        // Get the ASTContext from the unit
-        ASTContext &context = result.ast_unit->getASTContext();
-
-        // Create a MatchFinder and callback
         clang::ast_matchers::MatchFinder finder;
         ASTMatcherCallback callback(result);
-        callback.setMatcherName(matcher_expression);
 
-        // Parse the matcher expression and create appropriate matchers
-        // For now, handle common cases explicitly
-        if (matcher_expression == "functionDecl()") {
-            finder.addMatcher(functionDecl().bind("function"), &callback);
-        } else if (matcher_expression == "cxxRecordDecl()") {
-            finder.addMatcher(cxxRecordDecl().bind("class"), &callback);
-        } else if (matcher_expression == "cxxMethodDecl(isPublic())") {
-            finder.addMatcher(cxxMethodDecl(isPublic()).bind("function"),
-                              &callback);
-        } else if (matcher_expression ==
-                   "functionDecl(hasBody(compoundStmt()))") {
-            finder.addMatcher(
-                functionDecl(hasBody(compoundStmt())).bind("function"),
-                &callback);
-        } else if (matcher_expression == "cxxConstructorDecl()") {
-            finder.addMatcher(cxxConstructorDecl().bind("function"), &callback);
-        } else if (matcher_expression == "cxxMethodDecl(isVirtual())") {
-            finder.addMatcher(cxxMethodDecl(isVirtual()).bind("function"),
-                              &callback);
-        } else if (matcher_expression == "varDecl()") {
-            finder.addMatcher(varDecl().bind("variable"), &callback);
-        } else {
-            // Default fallback - match all function declarations
-            finder.addMatcher(functionDecl().bind("function"), &callback);
-        }
+        finder.addMatcher(matcher, &callback);
 
-        // Run the matcher on the AST
-        finder.matchAST(context);
+        finder.matchAST(ctx);
 
-        // Ensure we have a root node
         if (!result.root) {
-            result.root = std::make_unique<ASTNode>(nullptr, &context);
+            result.root = std::make_unique<ASTNode>(nullptr, &ctx);
         }
 
     } catch (const std::exception &e) {

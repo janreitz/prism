@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ast_node.h"
+
 #include <algorithm>
 #include <cstddef>
 #include <variant>
@@ -8,7 +9,6 @@
 // Forward declarations for Clang AST types
 namespace clang
 {
-class ASTContext;
 class Decl;
 class FunctionDecl;
 class CXXRecordDecl;
@@ -40,9 +40,6 @@ struct ASTAnalysisResult {
     size_t min_size = std::numeric_limits<size_t>::max();
     size_t max_size = 0;
     size_t total_size = 0;
-
-    // CRITICAL: Keep the AST alive so clang_decl_ pointers remain valid
-    std::unique_ptr<clang::ASTUnit> ast_unit;
 
     bool has_errors() const { return !errors.empty(); }
     double success_rate() const
@@ -87,6 +84,7 @@ size_t count_statements(const clang::Stmt *stmt);
 size_t count_decision_points(const clang::Stmt *stmt);
 
 std::function<ImU32(const ASTNode &)>
-create_complexity_coloring_strategy(const ASTAnalysisResult &context);
+create_complexity_coloring_strategy(const ASTAnalysisResult &analysis_result,
+                                    clang::ASTUnit *unit);
 
 std::function<ImU32(const ASTNode &)> create_type_based_coloring_strategy();

@@ -3,9 +3,14 @@
 #include "ast_matcher.h"
 #include "ast_node.h"
 #include "treemap_widget.h"
+
+#include "clang/ASTMatchers/ASTMatchers.h"
+#include "clang/Frontend/ASTUnit.h"
+
 #include <imgui.h>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -33,20 +38,31 @@ class ASTMatcherView
     char source_buffer_[4096];
 
     // Matcher input
-    char matcher_input_[512];
-    std::string current_matcher_;
+    size_t current_matcher_idx_ = 0;
     std::string error_message_;
 
-    // Predefined matchers
-    struct PredefinedMatcher {
-        std::string name;
-        std::string matcher_code;
-        std::string description;
-    };
-    std::vector<PredefinedMatcher> predefined_matchers_;
-    int selected_predefined_ = -1;
+    const std::vector<
+        std::pair<std::string, clang::ast_matchers::DeclarationMatcher>>
+        predefined_matchers_{
+            {"functionDecl()",
+             clang::ast_matchers::functionDecl().bind("function")},
+            {"cxxMethodDecl(isPublic())",
+             clang::ast_matchers::cxxMethodDecl(clang::ast_matchers::isPublic())
+                 .bind("function")},
+            {"functionDecl(hasBody(compoundStmt()))",
+             clang::ast_matchers::functionDecl(
+                 clang::ast_matchers::hasBody(
+                     clang::ast_matchers::compoundStmt()))
+                 .bind("function")},
+            {"cxxConstructorDecl()",
+             clang::ast_matchers::cxxConstructorDecl().bind("function")},
+            {"cxxMethodDecl(isVirtual())", clang::ast_matchers::cxxMethodDecl(
+                                               clang::ast_matchers::isVirtual())
+                                               .bind("function")},
+        };
 
     // Analysis results
+    std::unique_ptr<clang::ASTUnit> ast_unit_;
     ASTAnalysisResult analysis_result_;
     std::unique_ptr<TreeMapWidget<ASTNode>> treemap_;
 
@@ -58,18 +74,14 @@ class ASTMatcherView
     std::string hovered_info_ = "Hover over an AST node to see details";
     const ASTNode *selected_node_ = nullptr;
 
-    // Internal methods
     void render_source_input();
+    void parse_ast();
     void render_matcher_controls();
+    bool apply_matcher_to_source();
     void render_treemap();
     void render_interactive_info();
     void render_statistics();
     void render_selection_details();
-    void refresh_analysis();
     void update_coloring_strategy();
     void register_treemap_callbacks();
-    void initialize_predefined_matchers();
-
-    // Analysis methods
-    bool apply_matcher_to_source();
 };

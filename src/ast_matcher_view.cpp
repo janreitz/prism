@@ -130,14 +130,7 @@ int main() {
                  sizeof(source_buffer_) - 1);
     source_buffer_[sizeof(source_buffer_) - 1] = '\0';
 
-    // Initialize matcher input
-    current_matcher_ = "functionDecl()";
-    std::strncpy(matcher_input_, current_matcher_.c_str(),
-                 sizeof(matcher_input_) - 1);
-    matcher_input_[sizeof(matcher_input_) - 1] = '\0';
-
-    initialize_predefined_matchers();
-    refresh_analysis();
+    parse_ast();
 }
 
 bool ASTMatcherView::render()
@@ -186,10 +179,23 @@ void ASTMatcherView::render_source_input()
         source_code_ = std::string(source_buffer_);
     }
 
-    if (ImGui::Button("Analyze")) {
+    if (ImGui::Button("Parse AST")) {
         source_code_ = std::string(source_buffer_);
-        refresh_analysis();
+        parse_ast();
     }
+}
+
+void ASTMatcherView::parse_ast()
+{
+    error_message_.clear();
+    selected_node_ = nullptr; // Clear selection on new analysis
+
+    // Create ASTUnit to keep the AST alive
+    std::vector<std::string> args = {"-std=c++17"};
+
+    // Parse source code into AST using ASTUnit - this keeps the AST alive
+    ast_unit_ =
+        clang::tooling::buildASTFromCodeWithArgs(source_code_, args, filename_);
 }
 
 void ASTMatcherView::render_matcher_controls()
@@ -199,48 +205,62 @@ void ASTMatcherView::render_matcher_controls()
     // Predefined matcher selection
     if (ImGui::BeginCombo(
             "Predefined Matchers",
-            selected_predefined_ >= 0
-                ? predefined_matchers_[selected_predefined_].name.c_str()
-                : "Custom")) {
+            predefined_matchers_[current_matcher_idx_].first.c_str())) {
 
-        for (int i = 0; i < predefined_matchers_.size(); ++i) {
-            bool is_selected = (selected_predefined_ == i);
-            if (ImGui::Selectable(predefined_matchers_[i].name.c_str(),
+        for (size_t i = 0; i < predefined_matchers_.size(); ++i) {
+            const bool is_selected = (current_matcher_idx_ == i);
+            if (ImGui::Selectable(predefined_matchers_[i].first.c_str(),
                                   is_selected)) {
-                selected_predefined_ = i;
-                current_matcher_ = predefined_matchers_[i].matcher_code;
-                std::strncpy(matcher_input_, current_matcher_.c_str(),
-                             sizeof(matcher_input_) - 1);
-                matcher_input_[sizeof(matcher_input_) - 1] = '\0';
+                current_matcher_idx_ = i;
+                apply_matcher_to_source();
             }
 
             if (is_selected) {
                 ImGui::SetItemDefaultFocus();
             }
-
-            // Show description as tooltip
-            if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("%s",
-                                  predefined_matchers_[i].description.c_str());
-            }
         }
         ImGui::EndCombo();
     }
+}
 
-    // Custom matcher input
-    if (ImGui::InputText("Matcher Expression", matcher_input_,
-                         sizeof(matcher_input_))) {
-        current_matcher_ = std::string(matcher_input_);
-        selected_predefined_ = -1; // Mark as custom
+bool ASTMatcherView::apply_matcher_to_source()
+{
+    if (!ast_unit_) {
+        std::cout << "Need to parse AST before matching!" << std::endl;
+        return false;
     }
+    error_message_.clear();
+    selected_node_ = nullptr; // Clear selection on new analysis
 
-    ImGui::SameLine();
-    if (ImGui::Button("Apply Matcher")) {
-        current_matcher_ = std::string(matcher_input_);
-        apply_matcher_to_source();
+    try {
+        std::cout << "Applying matcher: " << current_matcher_idx_ << std::endl;
+
+        analysis_result_ = analyze_with_matcher(
+            ast_unit_->getASTContext(),
+            predefined_matchers_[current_matcher_idx_].second, filename_);
+
+        if (analysis_result_.root) {
+            treemap_ = std::make_unique<TreeMapWidget<ASTNode>>(
+                *analysis_result_.root);
+            update_coloring_strategy();
+            register_treemap_callbacks();
+
+            std::cout << "Match analysis completed: "
+                      << analysis_result_.functions_found << " functions, "
+                      << analysis_result_.classes_found << " classes found"
+                      << std::endl;
+            return true;
+        } else {
+            error_message_ =
+                "No matches found for expression: " + current_matcher_idx_;
+            treemap_.reset();
+            return false;
+        }
+    } catch (const std::exception &e) {
+        error_message_ = std::string("Matcher analysis failed: ") + e.what();
+        treemap_.reset();
+        return false;
     }
-
-    ImGui::Text("Current Matcher: %s", current_matcher_.c_str());
 }
 
 void ASTMatcherView::render_treemap()
@@ -381,15 +401,14 @@ void ASTMatcherView::render_selection_details()
     ImGui::Text("Type: %s", selected_node_->type_string().c_str());
     ImGui::Text(
         "Location: %s",
-        format_source_location(
-            analysis_result_.ast_unit->getASTContext().getSourceManager(),
-            selected_node_->source_location())
+        format_source_location(ast_unit_->getASTContext().getSourceManager(),
+                               selected_node_->source_location())
             .c_str());
     ImGui::Text("LOCs: %.1ld", selected_node_->locs());
 
     // Detailed metrics computed on-demand using direct casting
     const clang::Decl *decl = selected_node_->clang_decl();
-    clang::ASTContext &ctx = analysis_result_.ast_unit->getASTContext();
+    clang::ASTContext &ctx = ast_unit_->getASTContext();
 
     if (const auto *func_decl = clang::dyn_cast<clang::FunctionDecl>(decl)) {
         render_function_details(func_decl, ctx);
@@ -411,67 +430,6 @@ void ASTMatcherView::render_selection_details()
     }
 }
 
-void ASTMatcherView::refresh_analysis()
-{
-    error_message_.clear();
-    selected_node_ = nullptr; // Clear selection on new analysis
-
-    try {
-        analysis_result_ =
-            analyze_with_matcher(source_code_, current_matcher_, filename_);
-
-        if (analysis_result_.root) {
-            treemap_ = std::make_unique<TreeMapWidget<ASTNode>>(
-                *analysis_result_.root);
-            update_coloring_strategy();
-            register_treemap_callbacks();
-        } else {
-            treemap_.reset();
-            error_message_ = "Failed to analyze source code with matcher: " +
-                             current_matcher_;
-        }
-    } catch (const std::exception &e) {
-        treemap_.reset();
-        error_message_ = std::string("Exception during analysis: ") + e.what();
-    }
-}
-
-bool ASTMatcherView::apply_matcher_to_source()
-{
-    error_message_.clear();
-    selected_node_ = nullptr; // Clear selection on new analysis
-
-    try {
-        std::cout << "Applying matcher: " << current_matcher_ << std::endl;
-
-        // Use the real ASTMatcher-based analysis
-        analysis_result_ =
-            analyze_with_matcher(source_code_, current_matcher_, filename_);
-
-        if (analysis_result_.root) {
-            treemap_ = std::make_unique<TreeMapWidget<ASTNode>>(
-                *analysis_result_.root);
-            update_coloring_strategy();
-            register_treemap_callbacks();
-
-            std::cout << "Match analysis completed: "
-                      << analysis_result_.functions_found << " functions, "
-                      << analysis_result_.classes_found << " classes found"
-                      << std::endl;
-            return true;
-        } else {
-            error_message_ =
-                "No matches found for expression: " + current_matcher_;
-            treemap_.reset();
-            return false;
-        }
-    } catch (const std::exception &e) {
-        error_message_ = std::string("Matcher analysis failed: ") + e.what();
-        treemap_.reset();
-        return false;
-    }
-}
-
 void ASTMatcherView::update_coloring_strategy()
 {
     if (!treemap_)
@@ -482,8 +440,8 @@ void ASTMatcherView::update_coloring_strategy()
         treemap_->set_coloring_strategy(create_type_based_coloring_strategy());
         break;
     case ColoringMode::Complexity:
-        treemap_->set_coloring_strategy(
-            create_complexity_coloring_strategy(analysis_result_));
+        treemap_->set_coloring_strategy(create_complexity_coloring_strategy(
+            analysis_result_, ast_unit_.get()));
         break;
     }
 }
@@ -504,26 +462,6 @@ void ASTMatcherView::register_treemap_callbacks()
     });
 }
 
-void ASTMatcherView::initialize_predefined_matchers()
-{
-    predefined_matchers_ = {
-        {"All Functions", "functionDecl()", "Match all function declarations"},
-        {"All Classes", "cxxRecordDecl()",
-         "Match all C++ class/struct declarations"},
-        {"Public Methods", "cxxMethodDecl(isPublic())",
-         "Match all public member functions"},
-        {"Complex Functions", "functionDecl(hasBody(compoundStmt()))",
-         "Match functions with compound statement bodies"},
-        {"Constructors", "cxxConstructorDecl()",
-         "Match all constructor declarations"},
-        {"Virtual Functions", "cxxMethodDecl(isVirtual())",
-         "Match all virtual member functions"},
-        {"For Loops", "forStmt()", "Match all for loop statements"},
-        {"If Statements", "ifStmt()", "Match all if statements"},
-        {"Nested Loops", "forStmt(hasDescendant(forStmt()))",
-         "Match for loops containing other for loops"}};
-}
-
 void ASTMatcherView::set_source_code(const std::string &code,
                                      const std::string &filename)
 {
@@ -531,7 +469,7 @@ void ASTMatcherView::set_source_code(const std::string &code,
     filename_ = filename;
     std::strncpy(source_buffer_, code.c_str(), sizeof(source_buffer_) - 1);
     source_buffer_[sizeof(source_buffer_) - 1] = '\0';
-    refresh_analysis();
+    parse_ast();
 }
 
 void ASTMatcherView::add_predefined_matcher(const std::string &name,

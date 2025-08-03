@@ -109,27 +109,28 @@ NamespaceMetrics compute_namespace_metrics(const clang::Decl *decl,
     return metrics;
 }
 
+// TODO refactor so unit is not needed and complexity metrics don't have to be
+// recomputed each time
 std::function<ImU32(const ASTNode &)>
-create_complexity_coloring_strategy(const ASTAnalysisResult &context)
+create_complexity_coloring_strategy(const ASTAnalysisResult &analysis_result,
+                                    clang::ASTUnit *unit)
 {
-    return [&context](const ASTNode &node) -> ImU32 {
+    return [&analysis_result, unit](const ASTNode &node) -> ImU32 {
         float complexity = 1.0f;
 
         // Compute complexity on-demand using direct casting
-        if (context.ast_unit && node.clang_decl()) {
+        if (node.clang_decl()) {
             const clang::Decl *decl = node.clang_decl();
-            clang::ASTContext &ctx = context.ast_unit->getASTContext();
-
+            clang::ASTContext &ctx = unit->getASTContext();
             if (const auto *func_decl =
                     clang::dyn_cast<clang::FunctionDecl>(decl)) {
                 auto metrics = compute_function_metrics(func_decl, ctx);
                 complexity = static_cast<float>(metrics.cyclomatic_complexity);
             }
-            // Other node types don't have complexity, keep default value
-            // of 1.0f
         }
 
-        float max_complexity = static_cast<float>(context.max_complexity);
+        float max_complexity =
+            static_cast<float>(analysis_result.max_complexity);
 
         if (max_complexity == 0)
             return IM_COL32(128, 128, 128, 255);

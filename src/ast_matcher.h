@@ -22,14 +22,8 @@ class ASTMatcherCallback
     void
     run(const clang::ast_matchers::MatchFinder::MatchResult &Result) override;
 
-    void setMatcherName(const std::string &name)
-    {
-        current_matcher_name_ = name;
-    }
-
   private:
     ASTAnalysisResult &analysis_result_;
-    std::string current_matcher_name_;
 
     // Track seen nodes to avoid duplicates
     std::unordered_map<const clang::Decl *, ASTNode *> decl_to_node_;
@@ -40,6 +34,6 @@ class ASTMatcherCallback
 
 // Main ASTMatcher analysis function
 ASTAnalysisResult
-analyze_with_matcher(const std::string &source_code,
-                     const std::string &matcher_expression,
+analyze_with_matcher(clang::ASTContext &ctx,
+                     const clang::ast_matchers::DeclarationMatcher &matcher,
                      const std::string &filename = "source.cpp");
