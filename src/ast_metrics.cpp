@@ -7,6 +7,7 @@
 #include <clang/AST/Stmt.h>
 #include <clang/Basic/SourceLocation.h>
 #include <clang/Basic/SourceManager.h>
+#include <clang/Frontend/ASTUnit.h>
 
 using namespace clang;
 
@@ -108,4 +109,56 @@ NamespaceMetrics compute_namespace_metrics(const clang::Decl *decl,
     metrics.child_count = child_count;
 
     return metrics;
+}
+
+std::function<ImU32(const ASTNode &)>
+create_complexity_coloring_strategy(const ASTAnalysisResult &context)
+{
+    return [&context](const ASTNode &node) -> ImU32 {
+        float complexity = 1.0f;
+
+        // Compute complexity on-demand using direct casting
+        if (context.ast_unit && node.clang_decl()) {
+            const clang::Decl *decl = node.clang_decl();
+            clang::ASTContext &ctx = context.ast_unit->getASTContext();
+
+            if (const auto *func_decl =
+                    clang::dyn_cast<clang::FunctionDecl>(decl)) {
+                auto metrics = compute_function_metrics(func_decl, ctx);
+                complexity = static_cast<float>(metrics.cyclomatic_complexity);
+            }
+            // Other node types don't have complexity, keep default value
+            // of 1.0f
+        }
+
+        float max_complexity = static_cast<float>(context.max_complexity);
+
+        if (max_complexity == 0)
+            return IM_COL32(128, 128, 128, 255);
+
+        float ratio = complexity / max_complexity;
+
+        // Green to red gradient based on complexity
+        int red = static_cast<int>(255 * ratio);
+        int green = static_cast<int>(255 * (1.0f - ratio));
+        return IM_COL32(red, green, 0, 255);
+    };
+}
+
+std::function<ImU32(const ASTNode &)> create_type_based_coloring_strategy()
+{
+    return [](const ASTNode &node) -> ImU32 {
+        switch (node.node_type()) {
+        case ASTNodeType::Function:
+            return IM_COL32(100, 150, 255, 255); // Blue
+        case ASTNodeType::Class:
+            return IM_COL32(255, 150, 100, 255); // Orange
+        case ASTNodeType::Variable:
+            return IM_COL32(150, 255, 100, 255); // Green
+        case ASTNodeType::Namespace:
+            return IM_COL32(200, 100, 255, 255); // Purple
+        default:
+            return IM_COL32(128, 128, 128, 255); // Gray
+        }
+    };
 }

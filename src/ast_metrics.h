@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ast_node.h"
 #include <algorithm>
 #include <cstddef>
 #include <variant>
@@ -21,6 +22,36 @@ class ConditionalOperator;
 class CXXMethodDecl;
 class FieldDecl;
 } // namespace clang
+
+// Analysis result with error tracking (similar to AnalysisResult)
+struct ASTAnalysisResult {
+    std::unique_ptr<ASTNode> root;
+    std::vector<ASTAnalysisError> errors;
+    size_t nodes_processed = 0;
+    size_t functions_found = 0;
+    size_t classes_found = 0;
+
+    // Complexity statistics
+    size_t min_complexity = std::numeric_limits<size_t>::max();
+    size_t max_complexity = 0;
+    size_t total_complexity = 0;
+
+    // Size statistics
+    size_t min_size = std::numeric_limits<size_t>::max();
+    size_t max_size = 0;
+    size_t total_size = 0;
+
+    // CRITICAL: Keep the AST alive so clang_decl_ pointers remain valid
+    std::unique_ptr<clang::ASTUnit> ast_unit;
+
+    bool has_errors() const { return !errors.empty(); }
+    double success_rate() const
+    {
+        return nodes_processed > 0
+                   ? (double)(nodes_processed - errors.size()) / nodes_processed
+                   : 1.0;
+    }
+};
 
 // Metric structures (unchanged from ast_node.h)
 struct FunctionMetrics {
@@ -54,3 +85,8 @@ NamespaceMetrics compute_namespace_metrics(const clang::Decl *decl,
 // Utility functions for complexity analysis
 size_t count_statements(const clang::Stmt *stmt);
 size_t count_decision_points(const clang::Stmt *stmt);
+
+std::function<ImU32(const ASTNode &)>
+create_complexity_coloring_strategy(const ASTAnalysisResult &context);
+
+std::function<ImU32(const ASTNode &)> create_type_based_coloring_strategy();
