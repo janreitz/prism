@@ -28,7 +28,7 @@ class ASTMatcherCallback
     }
 
   private:
-    ASTAnalysisResult &result_;
+    ASTAnalysisResult &analysis_result_;
     std::string current_matcher_name_;
 
     // Track seen nodes to avoid duplicates

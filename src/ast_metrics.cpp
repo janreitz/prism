@@ -105,9 +105,7 @@ NamespaceMetrics compute_namespace_metrics(const clang::Decl *decl,
                                            size_t child_count)
 {
     NamespaceMetrics metrics;
-
     metrics.child_count = child_count;
-
     return metrics;
 }
 
