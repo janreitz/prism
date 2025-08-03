@@ -128,9 +128,11 @@ bool ASTNode::is_template_instantiation() const
         return false;
 
     if (const auto *func_decl = dyn_cast<FunctionDecl>(clang_decl_)) {
-        return func_decl->getTemplateSpecializationKind() != TSK_Undeclared;
+        return func_decl->getTemplatedKind() !=
+               FunctionDecl::TemplatedKind::TK_NonTemplate;
     } else if (const auto *class_decl = dyn_cast<CXXRecordDecl>(clang_decl_)) {
-        return class_decl->getTemplateSpecializationKind() != TSK_Undeclared;
+        return class_decl->getTemplateSpecializationKind() !=
+               TemplateSpecializationKind::TSK_Undeclared;
     }
 
     return false;
