@@ -98,9 +98,13 @@ double FileSystemNode::days_since_modified() const
 std::expected<std::unique_ptr<FileSystemNode>, FileAccessError>
 try_create_filesystem_node(const std::filesystem::path &path)
 {
-    return get_file_info(path).transform([&](FileInfo file_info) {
-        return std::make_unique<FileSystemNode>(path, std::move(file_info));
-    });
+    const auto maybe_file_info = get_file_info(path);
+    if (maybe_file_info) {
+        return std::make_unique<FileSystemNode>(path,
+                                                std::move(*maybe_file_info));
+    } else {
+        return std::unexpected(maybe_file_info.error());
+    }
 }
 
 void recurse_fs(FileSystemNode &node, AnalysisResult &analysis,
