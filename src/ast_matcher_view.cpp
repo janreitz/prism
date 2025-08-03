@@ -1,7 +1,9 @@
 #include "ast_matcher_view.h"
 #include "ast_metrics.h"
+#include "clang/AST/TemplateBase.h"
 #include "clang/Basic/SourceLocation.h"
 #include "clang/Basic/SourceManager.h"
+#include "llvm/Support/raw_ostream.h"
 #include <cstring>
 #include <iostream>
 
@@ -307,110 +309,105 @@ void ASTMatcherView::render_statistics()
     }
 }
 
-void ASTMatcherView::render_selection_details()
+std::string format_template_parameters(
+    const clang::FunctionTemplateSpecializationInfo *spec_info,
+    const clang::ASTContext &ctx)
 {
-    if (selected_node_) {
-        ImGui::Separator();
-        ImGui::Text("Selected Node Details");
-
-        // Basic info
-        ImGui::Text("Name: %s", selected_node_->get_qualified_name().c_str());
-        ImGui::Text("Type: %s", selected_node_->type_string().c_str());
-        ImGui::Text("LOCs: %.1ld", selected_node_->locs());
-        ImGui::Text(
-            "Location: %s",
-            format_source_location(
-                analysis_result_.ast_unit->getASTContext().getSourceManager(),
-                selected_node_->source_location())
-                .c_str());
-
-        // Detailed metrics computed on-demand using direct casting
-        if (analysis_result_.ast_unit && selected_node_->clang_decl()) {
-            const clang::Decl *decl = selected_node_->clang_decl();
-            clang::ASTContext &ctx = analysis_result_.ast_unit->getASTContext();
-
-            if (const auto *func_decl =
-                    clang::dyn_cast<clang::FunctionDecl>(decl)) {
-                auto metrics = compute_function_metrics(func_decl, ctx);
-                ImGui::Text("Function Metrics:");
-                ImGui::Text("  Statement Count: %zu", metrics.statement_count);
-                ImGui::Text("  Parameter Count: %zu", metrics.parameter_count);
-                ImGui::Text("  Cyclomatic Complexity: %zu",
-                            metrics.cyclomatic_complexity);
-            } else if (const auto *class_decl =
-                           clang::dyn_cast<clang::CXXRecordDecl>(decl)) {
-                auto metrics = compute_class_metrics(class_decl, ctx);
-                ImGui::Text("Class Metrics:");
-                ImGui::Text("  Total Members: %zu", metrics.member_count);
-                ImGui::Text("  Methods: %zu", metrics.method_count);
-                ImGui::Text("  Public Members: %zu",
-                            metrics.public_member_count);
-                ImGui::Text("  Private Members: %zu",
-                            metrics.private_member_count);
-            } else if (clang::isa<clang::NamespaceDecl>(decl)) {
-                auto metrics = compute_namespace_metrics(
-                    decl, ctx, selected_node_->children().size());
-                ImGui::Text("Namespace Metrics:");
-                ImGui::Text("  Child Count: %zu", metrics.child_count);
-            } else {
-                ImGui::Text("Type not implemented");
-            }
+    std::string template_params;
+    llvm::raw_string_ostream out(template_params);
+    // Try to get template argument information
+    if (const auto *args = spec_info->TemplateArguments) {
+        for (unsigned i = 0; i < args->size(); ++i) {
+            if (i > 0)
+                out << ", ";
+            const auto &arg = args->get(i);
+            arg.dump(out);
         }
+    }
+    return template_params;
+}
 
-        // Template instantiation info
-        if (selected_node_->is_template_instantiation()) {
+void render_function_details(const clang::FunctionDecl *func_decl,
+                             clang::ASTContext &ctx)
+{
+    auto metrics = compute_function_metrics(func_decl, ctx);
+    ImGui::Text("Function Metrics:");
+    ImGui::Text("  Statement Count: %zu", metrics.statement_count);
+    ImGui::Text("  Parameter Count: %zu", metrics.parameter_count);
+    ImGui::Text("  Cyclomatic Complexity: %zu", metrics.cyclomatic_complexity);
+
+    // Check for template instantiation
+    if (func_decl->isTemplateInstantiation()) {
+        const auto *temp_spec_info = func_decl->getTemplateSpecializationInfo();
+        if (temp_spec_info) {
             ImGui::Separator();
             ImGui::Text("Template Instantiation Details:");
-            ImGui::Text("Type: %s",
-                        selected_node_->template_instantiation_info().c_str());
+            ImGui::Text(
+                "Parameters: %s",
+                format_template_parameters(temp_spec_info, ctx).c_str());
 
-            // Debug: Show both locations to see if they're actually different
-            clang::SourceLocation inst_loc = selected_node_->source_location();
-            clang::SourceLocation def_loc =
-                selected_node_->template_definition_location();
-
-            ImGui::Text("Debug: inst_loc valid=%s, def_loc valid=%s",
-                        inst_loc.isValid() ? "yes" : "no",
-                        def_loc.isValid() ? "yes" : "no");
-
-            // Debug: Show raw location pointers to see if they're actually the
-            // same
-            if (analysis_result_.ast_unit) {
-                clang::SourceManager &sm =
-                    analysis_result_.ast_unit->getASTContext()
-                        .getSourceManager();
-                if (inst_loc.isValid() && def_loc.isValid()) {
-                    unsigned inst_raw = inst_loc.getRawEncoding();
-                    unsigned def_raw = def_loc.getRawEncoding();
-                    ImGui::Text("Debug: inst_raw=%u, def_raw=%u, same=%s",
-                                inst_raw, def_raw,
-                                (inst_raw == def_raw) ? "YES" : "NO");
-                }
-            }
-
-            // Instantiation location
-            if (inst_loc.isValid() && analysis_result_.ast_unit) {
-                ImGui::Text("Instantiation: %s",
-                            format_source_location(
-                                analysis_result_.ast_unit->getASTContext()
-                                    .getSourceManager(),
-                                inst_loc)
-                                .c_str());
-            }
-
-            // Template definition location
-            if (def_loc.isValid() && analysis_result_.ast_unit) {
-                ImGui::Text("Definition: %s",
-                            format_source_location(
-                                analysis_result_.ast_unit->getASTContext()
-                                    .getSourceManager(),
-                                def_loc)
-                                .c_str());
-            }
+            ImGui::Text("Instantiation: %s",
+                        format_source_location(
+                            ctx.getSourceManager(),
+                            temp_spec_info->getPointOfInstantiation())
+                            .c_str());
         }
-    } else {
+    }
+    // Check for explicit template specialization
+    else if (func_decl->isFunctionTemplateSpecialization()) {
+        const auto *temp_spec_info = func_decl->getTemplateSpecializationInfo();
+        if (temp_spec_info) {
+            ImGui::Separator();
+            ImGui::Text("Template Specialization Details:");
+            ImGui::Text(
+                "Parameters: %s",
+                format_template_parameters(temp_spec_info, ctx).c_str());
+        }
+    }
+}
+
+void ASTMatcherView::render_selection_details()
+{
+    if (!selected_node_) {
         ImGui::Text(
             "Click on a node in the treemap to see detailed information");
+        return;
+    }
+
+    ImGui::Text("Selected Node Details");
+
+    // Basic info
+    ImGui::Text("Name: %s", selected_node_->get_qualified_name().c_str());
+    ImGui::Text("Type: %s", selected_node_->type_string().c_str());
+    ImGui::Text(
+        "Location: %s",
+        format_source_location(
+            analysis_result_.ast_unit->getASTContext().getSourceManager(),
+            selected_node_->source_location())
+            .c_str());
+    ImGui::Text("LOCs: %.1ld", selected_node_->locs());
+
+    // Detailed metrics computed on-demand using direct casting
+    const clang::Decl *decl = selected_node_->clang_decl();
+    clang::ASTContext &ctx = analysis_result_.ast_unit->getASTContext();
+
+    if (const auto *func_decl = clang::dyn_cast<clang::FunctionDecl>(decl)) {
+        render_function_details(func_decl, ctx);
+    } else if (const auto *class_decl =
+                   clang::dyn_cast<clang::CXXRecordDecl>(decl)) {
+        auto metrics = compute_class_metrics(class_decl, ctx);
+        ImGui::Text("Class Metrics:");
+        ImGui::Text("  Total Members: %zu", metrics.member_count);
+        ImGui::Text("  Methods: %zu", metrics.method_count);
+        ImGui::Text("  Public Members: %zu", metrics.public_member_count);
+        ImGui::Text("  Private Members: %zu", metrics.private_member_count);
+    } else if (clang::isa<clang::NamespaceDecl>(decl)) {
+        auto metrics = compute_namespace_metrics(
+            decl, ctx, selected_node_->children().size());
+        ImGui::Text("Namespace Metrics:");
+        ImGui::Text("  Child Count: %zu", metrics.child_count);
+    } else {
+        ImGui::Text("Type not implemented");
     }
 }
 

@@ -40,40 +40,35 @@ void ASTMatcherCallback::run(const MatchFinder::MatchResult &Result)
     // Try to match different node types
     if (const auto *func_decl =
             Result.Nodes.getNodeAs<FunctionDecl>("function")) {
+        // TODO Skip template definitions, only show instantiations
         matched_decl = func_decl;
         result_.functions_found++;
     } else if (const auto *class_decl =
                    Result.Nodes.getNodeAs<CXXRecordDecl>("class")) {
         matched_decl = class_decl;
         result_.classes_found++;
-    } else if (const auto *var_decl =
-                   Result.Nodes.getNodeAs<VarDecl>("variable")) {
-        matched_decl = var_decl;
+    } else if (const auto *ns_decl =
+                   Result.Nodes.getNodeAs<NamespaceDecl>("namespace")) {
+        matched_decl = ns_decl;
     }
 
-    if (matched_decl) {
-        if (decl_to_node_.find(matched_decl) != decl_to_node_.end()) {
-            return;
-        }
-
-        // Create a temporary node to check if it's a template instantiation
-        auto temp_node = std::make_unique<ASTNode>(matched_decl, context);
-        
-        // Only keep template instantiations, skip definitions
-        if (!temp_node->is_template_instantiation()) {
-            return;
-        }
-
-        // Track this node to avoid duplicates
-        ASTNode *node_ptr = temp_node.get();
-        decl_to_node_[matched_decl] = node_ptr;
-
-        // Find or create the proper parent in the hierarchy
-        ASTNode *parent = find_or_create_parent(matched_decl, context);
-        parent->add_child(std::move(temp_node));
-        
-        result_.nodes_processed++;
+    if (!matched_decl) {
+        return;
     }
+
+    if (decl_to_node_.find(matched_decl) != decl_to_node_.end()) {
+        return;
+    }
+    // Track this node to avoid duplicates
+    auto temp_node = std::make_unique<ASTNode>(matched_decl, context);
+    ASTNode *node_ptr = temp_node.get();
+    decl_to_node_[matched_decl] = node_ptr;
+
+    // Find or create the proper parent in the hierarchy
+    ASTNode *parent = find_or_create_parent(matched_decl, context);
+    parent->add_child(std::move(temp_node));
+
+    result_.nodes_processed++;
 }
 
 ASTNode *ASTMatcherCallback::find_or_create_parent(const clang::Decl *decl,

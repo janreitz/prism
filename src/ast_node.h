@@ -56,8 +56,6 @@ class ASTNode
     // Source location (to be processed by view layer with SourceManager)
     clang::SourceLocation source_location() const;
 
-    // Template instantiation analysis
-    bool is_template_instantiation() const;
     clang::SourceLocation template_definition_location() const;
     std::string template_instantiation_info() const;
 
