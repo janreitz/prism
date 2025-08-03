@@ -91,7 +91,7 @@ bool TreeMapWidget<T>::render(const char *label, const ImVec2 &size,
 #if TRACY_ENABLE
     ZoneScoped;
 #endif
-    ImGui::BeginChild(label, size, true, ImGuiWindowFlags_NoScrollbar);
+    ImGui::BeginChild(label, size, ImGuiChildFlags_ResizeY);
 
     ImVec2 canvas_pos = ImGui::GetCursorScreenPos();
     ImVec2 canvas_size = ImGui::GetContentRegionAvail();
