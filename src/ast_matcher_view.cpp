@@ -444,12 +444,6 @@ bool ASTMatcherView::apply_matcher_to_source()
     try {
         std::cout << "Applying matcher: " << current_matcher_ << std::endl;
 
-        // Validate the matcher expression
-        if (!validate_matcher_expression(current_matcher_)) {
-            error_message_ = "Invalid matcher expression: " + current_matcher_;
-            return false;
-        }
-
         // Use the real ASTMatcher-based analysis
         analysis_result_ =
             analyze_with_matcher(source_code_, current_matcher_, filename_);

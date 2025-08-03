@@ -193,22 +193,3 @@ ASTAnalysisResult analyze_with_matcher(const std::string &source_code,
 
     return result;
 }
-
-bool validate_matcher_expression(const std::string &matcher_expression)
-{
-    // For now, just check against known valid expressions
-    static const std::vector<std::string> valid_expressions = {
-        "functionDecl()",
-        "cxxRecordDecl()",
-        "cxxMethodDecl(isPublic())",
-        "functionDecl(hasBody(compoundStmt()))",
-        "cxxConstructorDecl()",
-        "cxxMethodDecl(isVirtual())",
-        "varDecl()",
-        "forStmt()",
-        "ifStmt()",
-        "forStmt(hasDescendant(forStmt()))"};
-
-    return std::find(valid_expressions.begin(), valid_expressions.end(),
-                     matcher_expression) != valid_expressions.end();
-}

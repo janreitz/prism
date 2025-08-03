@@ -43,6 +43,3 @@ ASTAnalysisResult
 analyze_with_matcher(const std::string &source_code,
                      const std::string &matcher_expression,
                      const std::string &filename = "source.cpp");
-
-// Helper function to validate matcher expressions
-bool validate_matcher_expression(const std::string &matcher_expression);
