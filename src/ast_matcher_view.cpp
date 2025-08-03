@@ -150,12 +150,11 @@ bool ASTMatcherView::render()
         if (treemap_) {
             ImGui::Separator();
             render_treemap();
-            ImGui::Separator();
             render_interactive_info();
             ImGui::Separator();
-            render_statistics();
+            render_selection_details();
             ImGui::Separator();
-            render_match_results();
+            render_statistics();
         } else if (!error_message_.empty()) {
             ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "Error: %s",
                                error_message_.c_str());
@@ -239,8 +238,14 @@ void ASTMatcherView::render_matcher_controls()
         apply_matcher_to_source();
     }
 
+    ImGui::Text("Current Matcher: %s", current_matcher_.c_str());
+}
+
+void ASTMatcherView::render_treemap()
+{
     // Coloring mode selection
     ImGui::Text("Coloring Strategy:");
+    ImGui::SameLine();
     if (ImGui::RadioButton("Node Type",
                            coloring_mode_ == ColoringMode::NodeType)) {
         coloring_mode_ = ColoringMode::NodeType;
@@ -252,10 +257,7 @@ void ASTMatcherView::render_matcher_controls()
         coloring_mode_ = ColoringMode::Complexity;
         update_coloring_strategy();
     }
-}
 
-void ASTMatcherView::render_treemap()
-{
     ImVec2 available_size = ImGui::GetContentRegionAvail();
     available_size.y =
         std::max(available_size.y - 250.0f,
@@ -305,10 +307,8 @@ void ASTMatcherView::render_statistics()
     }
 }
 
-void ASTMatcherView::render_match_results()
+void ASTMatcherView::render_selection_details()
 {
-    ImGui::Text("Current Matcher: %s", current_matcher_.c_str());
-
     if (selected_node_) {
         ImGui::Separator();
         ImGui::Text("Selected Node Details");
