@@ -5,9 +5,7 @@
 #include <functional>
 #include <imgui.h>
 #include <memory>
-#include <optional>
 #include <string>
-#include <variant>
 #include <vector>
 
 // Forward declarations for Clang AST types
@@ -33,71 +31,6 @@ enum class ASTNodeType {
     Statement
 };
 
-struct FunctionMetrics {
-    size_t lines_of_code = 0;
-    size_t cyclomatic_complexity = 1;
-    size_t parameter_count = 0;
-    size_t statement_count = 0;
-
-    float size() const
-    {
-        // For functions, size is based on complexity and length
-        float computed =
-            static_cast<float>(lines_of_code + cyclomatic_complexity * 2);
-        return std::max(computed, 1.0f);
-    }
-};
-
-struct ClassMetrics {
-    size_t lines_of_code = 0;
-    size_t member_count = 0;
-    size_t method_count = 0;
-    size_t public_member_count = 0;
-    size_t private_member_count = 0;
-
-    float size() const
-    {
-        // For classes, size is based on number of members and methods
-        float computed = static_cast<float>(lines_of_code + member_count * 3 +
-                                            method_count * 2);
-        return std::max(computed, 1.0f);
-    }
-};
-
-struct NamespaceMetrics {
-    size_t lines_of_code = 0;
-    size_t child_count = 0;
-
-    float size() const
-    {
-        // For namespaces, size is primarily structural
-        float computed = static_cast<float>(lines_of_code + child_count);
-        return std::max(computed, 1.0f);
-    }
-};
-
-struct VariableMetrics {
-    size_t lines_of_code = 1; // Variables are typically single line
-
-    float size() const
-    {
-        return 1.0f; // Variables have minimal individual impact
-    }
-};
-
-struct DefaultMetrics {
-    size_t lines_of_code = 1;
-
-    float size() const
-    {
-        return std::max(static_cast<float>(lines_of_code), 1.0f);
-    }
-};
-
-using NodeMetrics =
-    std::variant<FunctionMetrics, ClassMetrics, NamespaceMetrics,
-                 VariableMetrics, DefaultMetrics>;
-
 struct ASTAnalysisError {
     std::string what;
     std::string node_name;
@@ -115,6 +48,7 @@ class ASTNode
     float size() const;
     std::vector<const ASTNode *> children() const;
 
+    size_t locs() const;
     std::string name() const;
     ASTNodeType node_type() const;
     const clang::Decl *clang_decl() const { return clang_decl_; }
@@ -126,9 +60,6 @@ class ASTNode
     bool is_template_instantiation() const;
     clang::SourceLocation template_definition_location() const;
     std::string template_instantiation_info() const;
-
-    // Get type-specific metrics
-    const NodeMetrics &metrics() const;
 
     // Utility functions
     std::string type_string() const;
@@ -144,15 +75,6 @@ class ASTNode
     // Cache lines of code (computed once during construction for fast size()
     // calls)
     size_t locs_;
-
-    // Cache computed metrics (computed on first access)
-    mutable std::optional<NodeMetrics> cached_metrics_;
-
-    FunctionMetrics compute_function_metrics() const;
-    ClassMetrics compute_class_metrics() const;
-
-    size_t count_statements(const clang::Stmt *stmt) const;
-    size_t count_decision_points(const clang::Stmt *stmt) const;
 };
 
 std::unique_ptr<ASTNode> create_node_from_decl(const clang::Decl *decl,
@@ -160,9 +82,6 @@ std::unique_ptr<ASTNode> create_node_from_decl(const clang::Decl *decl,
 
 size_t calculate_lines_of_code(const clang::Decl *decl,
                                clang::SourceManager *sm);
-
-NodeMetrics calculate_metrics(const clang::Decl *decl,
-                              clang::ASTContext *context);
 
 // Analysis result with error tracking (similar to AnalysisResult)
 struct ASTAnalysisResult {

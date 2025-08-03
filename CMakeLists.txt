@@ -114,6 +114,7 @@ add_executable(prism
     src/treemap.cpp
     src/filesystem_view.cpp
     src/ast_node.cpp
+    src/ast_metrics.cpp
     src/ast_matcher.cpp
     src/ast_matcher_view.cpp
     ${IMGUI_SOURCES} 
