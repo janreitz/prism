@@ -83,6 +83,9 @@ std::unique_ptr<ASTNode> create_node_from_decl(const clang::Decl *decl,
 size_t calculate_lines_of_code(const clang::Decl *decl,
                                clang::SourceManager *sm);
 
+std::string format_source_location(const clang::SourceManager &sm,
+                                   const clang::SourceLocation &src_loc);
+
 // Analysis result with error tracking (similar to AnalysisResult)
 struct ASTAnalysisResult {
     std::unique_ptr<ASTNode> root;

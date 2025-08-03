@@ -317,6 +317,12 @@ void ASTMatcherView::render_match_results()
         ImGui::Text("Name: %s", selected_node_->get_qualified_name().c_str());
         ImGui::Text("Type: %s", selected_node_->type_string().c_str());
         ImGui::Text("LOCs: %.1ld", selected_node_->locs());
+        ImGui::Text(
+            "Location: %s",
+            format_source_location(
+                analysis_result_.ast_unit->getASTContext().getSourceManager(),
+                selected_node_->source_location())
+                .c_str());
 
         // Detailed metrics computed on-demand using direct casting
         if (analysis_result_.ast_unit && selected_node_->clang_decl()) {
@@ -384,47 +390,22 @@ void ASTMatcherView::render_match_results()
 
             // Instantiation location
             if (inst_loc.isValid() && analysis_result_.ast_unit) {
-                clang::SourceManager &sm =
-                    analysis_result_.ast_unit->getASTContext()
-                        .getSourceManager();
-                std::string inst_filename = sm.getFilename(inst_loc).str();
-                if (inst_filename.empty())
-                    inst_filename = "<stdin>";
-                unsigned inst_line = sm.getExpansionLineNumber(inst_loc);
-                unsigned inst_column = sm.getExpansionColumnNumber(inst_loc);
-                ImGui::Text("Instantiation: %s:%u:%u", inst_filename.c_str(),
-                            inst_line, inst_column);
+                ImGui::Text("Instantiation: %s",
+                            format_source_location(
+                                analysis_result_.ast_unit->getASTContext()
+                                    .getSourceManager(),
+                                inst_loc)
+                                .c_str());
             }
 
             // Template definition location
             if (def_loc.isValid() && analysis_result_.ast_unit) {
-                clang::SourceManager &sm =
-                    analysis_result_.ast_unit->getASTContext()
-                        .getSourceManager();
-                std::string def_filename = sm.getFilename(def_loc).str();
-                if (def_filename.empty())
-                    def_filename = "<stdin>";
-                unsigned def_line = sm.getExpansionLineNumber(def_loc);
-                unsigned def_column = sm.getExpansionColumnNumber(def_loc);
-                ImGui::Text("Definition: %s:%u:%u", def_filename.c_str(),
-                            def_line, def_column);
-            }
-        } else {
-            // Regular location info for non-templates
-            clang::SourceLocation loc = selected_node_->source_location();
-            if (loc.isValid() && analysis_result_.ast_unit) {
-                clang::SourceManager &sm =
-                    analysis_result_.ast_unit->getASTContext()
-                        .getSourceManager();
-                std::string filename = sm.getFilename(loc).str();
-                if (filename.empty())
-                    filename = "<stdin>";
-                unsigned line = sm.getExpansionLineNumber(loc);
-                unsigned column = sm.getExpansionColumnNumber(loc);
-                ImGui::Text("Location: %s:%u:%u", filename.c_str(), line,
-                            column);
-            } else {
-                ImGui::Text("Location: <unknown>");
+                ImGui::Text("Definition: %s",
+                            format_source_location(
+                                analysis_result_.ast_unit->getASTContext()
+                                    .getSourceManager(),
+                                def_loc)
+                                .c_str());
             }
         }
     } else {
@@ -522,8 +503,7 @@ void ASTMatcherView::register_treemap_callbacks()
         return;
 
     treemap_->add_on_node_hover([this](const ASTNode &node) {
-        hovered_info_ = node.type_string() + ": " + node.get_qualified_name() +
-                        " (LOC: " + std::to_string(node.locs()) + ")";
+        hovered_info_ = node.type_string() + ": " + node.get_qualified_name();
     });
 
     treemap_->add_on_node_click([this](const ASTNode &node) {

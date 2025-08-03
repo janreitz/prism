@@ -282,6 +282,23 @@ size_t calculate_lines_of_code(const clang::Decl *decl,
     //  }
 }
 
+std::string format_source_location(const clang::SourceManager &sm,
+                                   const clang::SourceLocation &src_loc)
+{
+    if (!src_loc.isValid()) {
+        return "<unknown>";
+    }
+
+    std::string inst_filename = sm.getFilename(src_loc).str();
+    if (inst_filename.empty())
+        inst_filename = "<stdin>";
+    unsigned inst_line = sm.getExpansionLineNumber(src_loc);
+    unsigned inst_column = sm.getExpansionColumnNumber(src_loc);
+
+    return inst_filename + ":" + std::to_string(inst_line) + ":" +
+           std::to_string(inst_column);
+}
+
 std::unique_ptr<ASTNode> create_node_from_decl(const Decl *decl,
                                                ASTContext *context)
 {
