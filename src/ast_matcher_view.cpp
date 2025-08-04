@@ -356,32 +356,43 @@ void render_function_details(const clang::FunctionDecl *func_decl,
     ImGui::Text("  Parameter Count: %zu", metrics.parameter_count);
     ImGui::Text("  Cyclomatic Complexity: %zu", metrics.cyclomatic_complexity);
 
-    // Check for template instantiation
-    if (func_decl->isTemplateInstantiation()) {
+    // Check if this is any kind of template specialization (clang considers
+    // instantiation as specializations)
+    if (func_decl->isFunctionTemplateSpecialization()) {
         const auto *temp_spec_info = func_decl->getTemplateSpecializationInfo();
         if (temp_spec_info) {
             ImGui::Separator();
-            ImGui::Text("Template Instantiation Details:");
+
+            bool isImplicit = temp_spec_info->getTemplateSpecializationKind() ==
+                              clang::TSK_ImplicitInstantiation;
+
+            if (isImplicit) {
+                ImGui::Text("Template Instantiation Details:");
+            } else {
+                ImGui::Text("Template Specialization Details:");
+            }
+
+            // Template parameters
             ImGui::Text(
                 "Parameters: %s",
                 format_template_parameters(temp_spec_info, ctx).c_str());
 
-            ImGui::Text("Instantiation: %s",
-                        format_source_location(
-                            ctx.getSourceManager(),
-                            temp_spec_info->getPointOfInstantiation())
-                            .c_str());
-        }
-    }
-    // Check for explicit template specialization
-    else if (func_decl->isFunctionTemplateSpecialization()) {
-        const auto *temp_spec_info = func_decl->getTemplateSpecializationInfo();
-        if (temp_spec_info) {
-            ImGui::Separator();
-            ImGui::Text("Template Specialization Details:");
-            ImGui::Text(
-                "Parameters: %s",
-                format_template_parameters(temp_spec_info, ctx).c_str());
+            // Point of instantiation (for implicit instantiations)
+            if (isImplicit) {
+                ImGui::Text("Instantiation: %s",
+                            format_source_location(
+                                ctx.getSourceManager(),
+                                temp_spec_info->getPointOfInstantiation())
+                                .c_str());
+            }
+
+            if (auto *primary_template = temp_spec_info->getTemplate()) {
+                ImGui::Text(
+                    "Primary Template: %s",
+                    format_source_location(ctx.getSourceManager(),
+                                           primary_template->getLocation())
+                        .c_str());
+            }
         }
     }
 }
