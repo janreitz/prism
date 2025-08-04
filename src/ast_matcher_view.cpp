@@ -4,6 +4,7 @@
 #include "clang/AST/TemplateBase.h"
 #include "clang/Basic/SourceLocation.h"
 #include "clang/Basic/SourceManager.h"
+#include "clang/Tooling/CompilationDatabase.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cstring>
 #include <iostream>
@@ -133,8 +134,8 @@ int main() {
 
     error_message_.clear();
     selected_node_ = nullptr; // Clear selection on new analysis
-    ast_unit_ = prism::ast_generation::parse_ast_from_string(source_code_,
-                                                             args_, filename_);
+    ast_units_ = prism::ast_generation::parse_ast_from_string(source_code_,
+                                                              args_, filename_);
 }
 
 bool ASTMatcherView::render()
@@ -166,6 +167,25 @@ bool ASTMatcherView::render()
 
 void ASTMatcherView::render_source_input()
 {
+    ImGui::Text("AST Source Selection");
+
+    // Mode selection
+    static int input_mode = 0; // 0 = string, 1 = project
+    ImGui::RadioButton("Source Code", &input_mode, 0);
+    ImGui::SameLine();
+    ImGui::RadioButton("Project Directory", &input_mode, 1);
+
+    ImGui::Separator();
+
+    if (input_mode == 0) {
+        render_string_input();
+    } else {
+        render_project_input();
+    }
+}
+
+void ASTMatcherView::render_string_input()
+{
     ImGui::Text("Source Code Input");
 
     static char filename_buffer[256];
@@ -187,8 +207,85 @@ void ASTMatcherView::render_source_input()
         source_code_ = std::string(source_buffer_);
         error_message_.clear();
         selected_node_ = nullptr; // Clear selection on new analysis
-        ast_unit_ = prism::ast_generation::parse_ast_from_string(
+        ast_units_ = prism::ast_generation::parse_ast_from_string(
             source_code_, args_, filename_);
+    }
+}
+
+void ASTMatcherView::render_project_input()
+{
+    static char project_root_buffer[512] = "";
+    ImGui::InputText("Project Build Directory", project_root_buffer,
+                     sizeof(project_root_buffer));
+
+    std::filesystem::path project_root(project_root_buffer);
+    // Only enable button if we have a valid directory
+    bool project_root_is_valid = std::filesystem::exists(project_root) &&
+                                 std::filesystem::is_directory(project_root);
+
+    if (project_root_is_valid) {
+        ImGui::TextColored(ImVec4(0, 1, 0, 1), "Valid directory");
+    } else {
+        ImGui::TextColored(ImVec4(1, 0, 0, 1), "Invalid directory");
+    }
+
+    if (!project_root_is_valid) {
+        ImGui::BeginDisabled();
+    }
+
+    if (ImGui::Button("Load compile_commands.json")) {
+        std::string error_message;
+        compilation_db_ =
+            clang::tooling::CompilationDatabase::autoDetectFromDirectory(
+                project_root.string(), error_message);
+
+        if (!compilation_db_) {
+            error_message_ =
+                "Failed to detect compilation database: " + error_message;
+            std::cout << error_message_ << std::endl;
+        } else {
+            error_message_.clear();
+            std::cout << "Successfully loaded compilation database"
+                      << std::endl;
+        }
+    }
+
+    if (!project_root_is_valid) {
+        ImGui::EndDisabled();
+    }
+
+    // Show compilation database status
+    if (compilation_db_) {
+        auto files = compilation_db_->getAllFiles();
+        ImGui::TextColored(
+            ImVec4(0, 1, 0, 1),
+            "Compilation database loaded, found %zu source files",
+            files.size());
+    }
+
+    if (!compilation_db_) {
+        ImGui::BeginDisabled();
+    }
+
+    if (ImGui::Button("Parse ASTs")) {
+        selected_node_ = nullptr;
+
+        auto ast_units = prism::ast_generation::parse_project_ast(
+            *compilation_db_, project_root);
+
+        if (ast_units.empty()) {
+            std::cout << "Empty AST result" << std::endl;
+        } else {
+            ImGui::TextColored(ImVec4(0, 1, 0, 1),
+                               "Parsed %zu translation units",
+                               ast_units.size());
+            ast_units_ = std::move(ast_units.back());
+            ast_units.pop_back();
+        }
+    }
+
+    if (!compilation_db_) {
+        ImGui::EndDisabled();
     }
 }
 
@@ -217,7 +314,7 @@ void ASTMatcherView::render_matcher_controls()
 
 bool ASTMatcherView::apply_matcher_to_source()
 {
-    if (!ast_unit_) {
+    if (!ast_units_) {
         std::cout << "Need to parse AST before matching!" << std::endl;
         return false;
     }
@@ -228,7 +325,7 @@ bool ASTMatcherView::apply_matcher_to_source()
         std::cout << "Applying matcher: " << current_matcher_idx_ << std::endl;
 
         analysis_result_ = analyze_with_matcher(
-            ast_unit_->getASTContext(),
+            ast_units_->getASTContext(),
             predefined_matchers[current_matcher_idx_].second, filename_);
 
         if (analysis_result_.root) {
@@ -405,14 +502,14 @@ void ASTMatcherView::render_selection_details()
     ImGui::Text("Type: %s", selected_node_->type_string().c_str());
     ImGui::Text(
         "Location: %s",
-        format_source_location(ast_unit_->getASTContext().getSourceManager(),
+        format_source_location(ast_units_->getASTContext().getSourceManager(),
                                selected_node_->source_location())
             .c_str());
     ImGui::Text("LOCs: %.1ld", selected_node_->locs());
 
     // Detailed metrics computed on-demand using direct casting
     const clang::Decl *decl = selected_node_->clang_decl();
-    clang::ASTContext &ctx = ast_unit_->getASTContext();
+    clang::ASTContext &ctx = ast_units_->getASTContext();
 
     if (const auto *func_decl = clang::dyn_cast<clang::FunctionDecl>(decl)) {
         render_function_details(func_decl, ctx);
@@ -445,7 +542,7 @@ void ASTMatcherView::update_coloring_strategy()
         break;
     case ColoringMode::Complexity:
         treemap_->set_coloring_strategy(create_complexity_coloring_strategy(
-            analysis_result_, ast_unit_.get()));
+            analysis_result_, ast_units_.get()));
         break;
     }
 }
@@ -475,6 +572,6 @@ void ASTMatcherView::set_source_code(const std::string &code,
     source_buffer_[sizeof(source_buffer_) - 1] = '\0';
     error_message_.clear();
     selected_node_ = nullptr; // Clear selection on new analysis
-    ast_unit_ = prism::ast_generation::parse_ast_from_string(source_code_,
-                                                             args_, filename_);
+    ast_units_ = prism::ast_generation::parse_ast_from_string(source_code_,
+                                                              args_, filename_);
 }

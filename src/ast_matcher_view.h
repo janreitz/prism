@@ -6,6 +6,7 @@
 
 #include "clang/ASTMatchers/ASTMatchers.h"
 #include "clang/Frontend/ASTUnit.h"
+#include "clang/Tooling/CompilationDatabase.h"
 
 #include <imgui.h>
 #include <map>
@@ -32,13 +33,14 @@ class ASTMatcherView
     std::vector<std::string> args_ = {"-std=c++17"};
     std::string filename_ = "source.cpp";
     char source_buffer_[4096];
+    std::unique_ptr<clang::tooling::CompilationDatabase> compilation_db_;
 
     // Matcher input
     size_t current_matcher_idx_ = 0;
     std::string error_message_;
 
     // Analysis results
-    std::unique_ptr<clang::ASTUnit> ast_unit_;
+    std::unique_ptr<clang::ASTUnit> ast_units_;
     ASTAnalysisResult analysis_result_;
     std::unique_ptr<TreeMapWidget<ASTNode>> treemap_;
 
@@ -51,6 +53,8 @@ class ASTMatcherView
     const ASTNode *selected_node_ = nullptr;
 
     void render_source_input();
+    void render_string_input();
+    void render_project_input();
     void render_matcher_controls();
     bool apply_matcher_to_source();
     void render_treemap();
