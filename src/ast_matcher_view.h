@@ -41,6 +41,12 @@ class ASTMatcherView
         predefined_matchers_{
             {"functionDecl()",
              clang::ast_matchers::functionDecl().bind("function")},
+            {"functionDecl(isDefinition(),unless(isInStdNamespace()))",
+             clang::ast_matchers::functionDecl(
+                 clang::ast_matchers::isDefinition(),
+                 clang::ast_matchers::unless(
+                     clang::ast_matchers::isInStdNamespace()))
+                 .bind("function")},
             {"cxxMethodDecl(isPublic())",
              clang::ast_matchers::cxxMethodDecl(clang::ast_matchers::isPublic())
                  .bind("function")},

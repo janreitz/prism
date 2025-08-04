@@ -201,8 +201,6 @@ void ASTMatcherView::parse_ast()
 void ASTMatcherView::render_matcher_controls()
 {
     ImGui::Text("AST Matcher Configuration");
-
-    // Predefined matcher selection
     if (ImGui::BeginCombo(
             "Predefined Matchers",
             predefined_matchers_[current_matcher_idx_].first.c_str())) {
