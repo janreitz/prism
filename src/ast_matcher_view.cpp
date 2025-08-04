@@ -1,4 +1,5 @@
 #include "ast_matcher_view.h"
+#include "ast_generation.h"
 #include "ast_metrics.h"
 #include "clang/AST/TemplateBase.h"
 #include "clang/Basic/SourceLocation.h"
@@ -130,7 +131,10 @@ int main() {
                  sizeof(source_buffer_) - 1);
     source_buffer_[sizeof(source_buffer_) - 1] = '\0';
 
-    parse_ast();
+    error_message_.clear();
+    selected_node_ = nullptr; // Clear selection on new analysis
+    ast_unit_ = prism::ast_generation::parse_ast_from_string(source_code_,
+                                                             args_, filename_);
 }
 
 bool ASTMatcherView::render()
@@ -181,21 +185,11 @@ void ASTMatcherView::render_source_input()
 
     if (ImGui::Button("Parse AST")) {
         source_code_ = std::string(source_buffer_);
-        parse_ast();
+        error_message_.clear();
+        selected_node_ = nullptr; // Clear selection on new analysis
+        ast_unit_ = prism::ast_generation::parse_ast_from_string(
+            source_code_, args_, filename_);
     }
-}
-
-void ASTMatcherView::parse_ast()
-{
-    error_message_.clear();
-    selected_node_ = nullptr; // Clear selection on new analysis
-
-    // Create ASTUnit to keep the AST alive
-    std::vector<std::string> args = {"-std=c++17"};
-
-    // Parse source code into AST using ASTUnit - this keeps the AST alive
-    ast_unit_ =
-        clang::tooling::buildASTFromCodeWithArgs(source_code_, args, filename_);
 }
 
 void ASTMatcherView::render_matcher_controls()
@@ -479,5 +473,8 @@ void ASTMatcherView::set_source_code(const std::string &code,
     filename_ = filename;
     std::strncpy(source_buffer_, code.c_str(), sizeof(source_buffer_) - 1);
     source_buffer_[sizeof(source_buffer_) - 1] = '\0';
-    parse_ast();
+    error_message_.clear();
+    selected_node_ = nullptr; // Clear selection on new analysis
+    ast_unit_ = prism::ast_generation::parse_ast_from_string(source_code_,
+                                                             args_, filename_);
 }

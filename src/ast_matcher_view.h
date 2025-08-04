@@ -29,6 +29,7 @@ class ASTMatcherView
   private:
     // Source input
     std::string source_code_;
+    std::vector<std::string> args_ = {"-std=c++17"};
     std::string filename_ = "source.cpp";
     char source_buffer_[4096];
 
@@ -50,7 +51,6 @@ class ASTMatcherView
     const ASTNode *selected_node_ = nullptr;
 
     void render_source_input();
-    void parse_ast();
     void render_matcher_controls();
     bool apply_matcher_to_source();
     void render_treemap();
