@@ -147,17 +147,28 @@ create_complexity_coloring_strategy(const ASTAnalysisResult &analysis_result,
 std::function<ImU32(const ASTNode &)> create_type_based_coloring_strategy()
 {
     return [](const ASTNode &node) -> ImU32 {
-        switch (node.node_type()) {
-        case ASTNodeType::Function:
-            return IM_COL32(100, 150, 255, 255); // Blue
-        case ASTNodeType::Class:
-            return IM_COL32(255, 150, 100, 255); // Orange
-        case ASTNodeType::Variable:
-            return IM_COL32(150, 255, 100, 255); // Green
-        case ASTNodeType::Namespace:
-            return IM_COL32(200, 100, 255, 255); // Purple
-        default:
+        const auto *func_decl =
+            clang::dyn_cast<clang::FunctionDecl>(node.clang_decl());
+
+        if (!func_decl) {
             return IM_COL32(128, 128, 128, 255); // Gray
         }
+
+        if (func_decl->isTemplated()) {
+            // Primary template
+            return IM_COL32(255, 150, 100, 255); // Orange
+        }
+
+        if (func_decl->isFunctionTemplateSpecialization()) {
+            switch (func_decl->getTemplateSpecializationKind()) {
+            case clang::TemplateSpecializationKind::TSK_ImplicitInstantiation:
+                return IM_COL32(100, 150, 255, 255); // Blue
+            case clang::TemplateSpecializationKind::
+                TSK_ExplicitInstantiationDefinition:
+                return IM_COL32(200, 100, 255, 255); // purple
+            }
+        }
+
+        return IM_COL32(150, 255, 100, 255); // Green
     };
 }
