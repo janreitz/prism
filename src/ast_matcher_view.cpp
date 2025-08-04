@@ -272,7 +272,7 @@ void ASTMatcherView::render_project_input()
     if (ImGui::Button("Parse ASTs")) {
         selected_node_ = nullptr;
 
-        auto ast_units_ = prism::ast_generation::parse_project_ast(
+        auto ast_units_ = prism::ast_generation::parse_project_asts(
             *compilation_db_, project_root);
     }
 
