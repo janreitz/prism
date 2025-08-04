@@ -25,11 +25,6 @@ class ASTMatcherView
     // Configuration
     void set_source_code(const std::string &code,
                          const std::string &filename = "source.cpp");
-    void add_predefined_matcher(const std::string &name,
-                                const std::string &description);
-
-    // State queries
-    bool has_valid_analysis() const { return treemap_ != nullptr; }
 
   private:
     // Source input

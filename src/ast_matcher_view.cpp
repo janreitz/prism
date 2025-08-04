@@ -358,6 +358,7 @@ void render_function_details(const clang::FunctionDecl *func_decl,
 
     // Check if this is any kind of template specialization (clang considers
     // instantiation as specializations)
+
     if (func_decl->isFunctionTemplateSpecialization()) {
         const auto *temp_spec_info = func_decl->getTemplateSpecializationInfo();
         if (temp_spec_info) {
@@ -481,10 +482,4 @@ void ASTMatcherView::set_source_code(const std::string &code,
     std::strncpy(source_buffer_, code.c_str(), sizeof(source_buffer_) - 1);
     source_buffer_[sizeof(source_buffer_) - 1] = '\0';
     parse_ast();
-}
-
-void ASTMatcherView::add_predefined_matcher(const std::string &name,
-                                            const std::string &description)
-{
-    // TODO: Allow adding custom predefined matchers
 }
