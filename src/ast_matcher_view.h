@@ -23,10 +23,6 @@ class ASTMatcherView
     // Main render function - returns true if view should remain open
     bool render();
 
-    // Configuration
-    void set_source_code(const std::string &code,
-                         const std::string &filename = "source.cpp");
-
   private:
     // Source input
     std::string source_code_;
@@ -40,7 +36,7 @@ class ASTMatcherView
     std::string error_message_;
 
     // Analysis results
-    std::unique_ptr<clang::ASTUnit> ast_units_;
+    std::vector<std::unique_ptr<clang::ASTUnit>> ast_units_;
     ASTAnalysisResult analysis_result_;
     std::unique_ptr<TreeMapWidget<ASTNode>> treemap_;
 
