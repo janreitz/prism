@@ -203,11 +203,11 @@ void ASTMatcherView::render_matcher_controls()
     ImGui::Text("AST Matcher Configuration");
     if (ImGui::BeginCombo(
             "Predefined Matchers",
-            predefined_matchers_[current_matcher_idx_].first.c_str())) {
+            predefined_matchers[current_matcher_idx_].first.c_str())) {
 
-        for (size_t i = 0; i < predefined_matchers_.size(); ++i) {
+        for (size_t i = 0; i < predefined_matchers.size(); ++i) {
             const bool is_selected = (current_matcher_idx_ == i);
-            if (ImGui::Selectable(predefined_matchers_[i].first.c_str(),
+            if (ImGui::Selectable(predefined_matchers[i].first.c_str(),
                                   is_selected)) {
                 current_matcher_idx_ = i;
                 apply_matcher_to_source();
@@ -235,7 +235,7 @@ bool ASTMatcherView::apply_matcher_to_source()
 
         analysis_result_ = analyze_with_matcher(
             ast_unit_->getASTContext(),
-            predefined_matchers_[current_matcher_idx_].second, filename_);
+            predefined_matchers[current_matcher_idx_].second, filename_);
 
         if (analysis_result_.root) {
             treemap_ = std::make_unique<TreeMapWidget<ASTNode>>(

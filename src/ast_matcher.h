@@ -12,6 +12,31 @@
 #include <unordered_set>
 #include <vector>
 
+const std::vector<
+    std::pair<std::string, clang::ast_matchers::DeclarationMatcher>>
+    predefined_matchers{
+        {"functionDecl()",
+         clang::ast_matchers::functionDecl().bind("function")},
+        {"functionDecl(isDefinition(),unless(isInStdNamespace()))",
+         clang::ast_matchers::functionDecl(
+             clang::ast_matchers::isDefinition(),
+             clang::ast_matchers::unless(
+                 clang::ast_matchers::isInStdNamespace()))
+             .bind("function")},
+        {"cxxMethodDecl(isPublic())",
+         clang::ast_matchers::cxxMethodDecl(clang::ast_matchers::isPublic())
+             .bind("function")},
+        {"functionDecl(hasBody(compoundStmt()))",
+         clang::ast_matchers::functionDecl(
+             clang::ast_matchers::hasBody(clang::ast_matchers::compoundStmt()))
+             .bind("function")},
+        {"cxxConstructorDecl()",
+         clang::ast_matchers::cxxConstructorDecl().bind("function")},
+        {"cxxMethodDecl(isVirtual())",
+         clang::ast_matchers::cxxMethodDecl(clang::ast_matchers::isVirtual())
+             .bind("function")},
+    };
+
 class ASTMatcherCallback
     : public clang::ast_matchers::MatchFinder::MatchCallback
 {

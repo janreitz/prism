@@ -36,32 +36,6 @@ class ASTMatcherView
     size_t current_matcher_idx_ = 0;
     std::string error_message_;
 
-    const std::vector<
-        std::pair<std::string, clang::ast_matchers::DeclarationMatcher>>
-        predefined_matchers_{
-            {"functionDecl()",
-             clang::ast_matchers::functionDecl().bind("function")},
-            {"functionDecl(isDefinition(),unless(isInStdNamespace()))",
-             clang::ast_matchers::functionDecl(
-                 clang::ast_matchers::isDefinition(),
-                 clang::ast_matchers::unless(
-                     clang::ast_matchers::isInStdNamespace()))
-                 .bind("function")},
-            {"cxxMethodDecl(isPublic())",
-             clang::ast_matchers::cxxMethodDecl(clang::ast_matchers::isPublic())
-                 .bind("function")},
-            {"functionDecl(hasBody(compoundStmt()))",
-             clang::ast_matchers::functionDecl(
-                 clang::ast_matchers::hasBody(
-                     clang::ast_matchers::compoundStmt()))
-                 .bind("function")},
-            {"cxxConstructorDecl()",
-             clang::ast_matchers::cxxConstructorDecl().bind("function")},
-            {"cxxMethodDecl(isVirtual())", clang::ast_matchers::cxxMethodDecl(
-                                               clang::ast_matchers::isVirtual())
-                                               .bind("function")},
-        };
-
     // Analysis results
     std::unique_ptr<clang::ASTUnit> ast_unit_;
     ASTAnalysisResult analysis_result_;
