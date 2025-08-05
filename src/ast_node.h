@@ -42,7 +42,7 @@ class ASTNode
     explicit ASTNode(const clang::Decl *decl = nullptr,
                      clang::ASTContext *context = nullptr);
 
-    void add_child(std::unique_ptr<ASTNode> child);
+    void add_child(std::unique_ptr<ASTNode> &&child);
 
     // TreeNode concept interface
     float size() const;

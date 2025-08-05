@@ -19,7 +19,7 @@ ASTNode::ASTNode(const clang::Decl *decl, clang::ASTContext *context)
 {
 }
 
-void ASTNode::add_child(std::unique_ptr<ASTNode> child)
+void ASTNode::add_child(std::unique_ptr<ASTNode> &&child)
 {
     children_.push_back(std::move(child));
 }
