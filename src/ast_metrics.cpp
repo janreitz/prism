@@ -13,19 +13,27 @@ using namespace clang;
 ASTAnalysisResult::ASTAnalysisResult(ASTContext &ctx)
     : root(std::make_unique<ASTNode>(ctx.getTranslationUnitDecl(), &ctx))
 {
-    decl_to_node_.insert({root->clang_decl(), root.get()});
+    const auto *named_decl =
+        clang::dyn_cast<clang::NamedDecl>(root->clang_decl());
+
+    const auto qualified_name =
+        named_decl ? named_decl->getQualifiedNameAsString() : "";
+    decl_to_node_.insert({qualified_name, root.get()});
 }
 
 void ASTAnalysisResult::add_decl(const clang::Decl *decl,
                                  const clang::ASTContext &ctx)
 {
-    if (decl_to_node_.find(decl) != decl_to_node_.end()) {
+    const auto *named_decl = clang::dyn_cast<clang::NamedDecl>(decl);
+    const auto qualified_name = named_decl->getQualifiedNameAsString();
+
+    // Avoid duplicates
+    if (decl_to_node_.find(qualified_name) != decl_to_node_.end()) {
         return;
     }
 
-    // Track this node to avoid duplicates
     auto temp_node = std::make_unique<ASTNode>(decl, &ctx);
-    decl_to_node_[decl] = temp_node.get();
+    decl_to_node_[qualified_name] = temp_node.get();
 
     // Try to match different node types
     if (const auto *func_decl = dyn_cast<FunctionDecl>(decl)) {
@@ -59,7 +67,12 @@ ASTAnalysisResult::find_or_create_parent(const clang::Decl *decl,
 
         if (parent_decl) {
             // Check if we already have a node for this parent
-            auto it = decl_to_node_.find(parent_decl);
+            const auto *named_decl =
+                clang::dyn_cast<clang::NamedDecl>(parent_decl);
+            const auto qualified_name =
+                named_decl ? named_decl->getQualifiedNameAsString() : "";
+
+            auto it = decl_to_node_.find(qualified_name);
             if (it != decl_to_node_.end()) {
                 return it->second;
             }
@@ -68,7 +81,7 @@ ASTAnalysisResult::find_or_create_parent(const clang::Decl *decl,
             auto parent_node = create_node_from_decl(parent_decl, context);
             if (parent_node) {
                 ASTNode *parent_ptr = parent_node.get();
-                decl_to_node_[parent_decl] = parent_ptr;
+                decl_to_node_[qualified_name] = parent_ptr;
 
                 // Recursively find the parent's parent
                 ASTNode *grandparent =
