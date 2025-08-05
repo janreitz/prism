@@ -50,9 +50,6 @@ class ASTMatcherCallback
   private:
     ASTAnalysisResult &analysis_result_;
 
-    // Track seen nodes to avoid duplicates
-    std::unordered_map<const clang::Decl *, ASTNode *> decl_to_node_;
-
     ASTNode *find_or_create_parent(const clang::Decl *decl,
                                    clang::ASTContext *context);
 };

@@ -28,9 +28,9 @@ void ASTMatcherCallback::run(const MatchFinder::MatchResult &Result)
 
     // Ensure we have a root node
     if (!analysis_result_.root) {
-        analysis_result_.root = std::make_unique<ASTNode>(
-            nullptr, ctx); // nullptr represents TranslationUnit
-        decl_to_node_[nullptr] =
+        analysis_result_.root =
+            std::make_unique<ASTNode>(ctx->getTranslationUnitDecl(), ctx);
+        analysis_result_.decl_to_node_[nullptr] =
             analysis_result_.root.get(); // Map translation unit
     }
 
@@ -64,13 +64,14 @@ void ASTMatcherCallback::run(const MatchFinder::MatchResult &Result)
         return;
     }
 
-    if (decl_to_node_.find(matched_decl) != decl_to_node_.end()) {
+    if (analysis_result_.decl_to_node_.find(matched_decl) !=
+        analysis_result_.decl_to_node_.end()) {
         return;
     }
     // Track this node to avoid duplicates
     auto temp_node = std::make_unique<ASTNode>(matched_decl, ctx);
     ASTNode *node_ptr = temp_node.get();
-    decl_to_node_[matched_decl] = node_ptr;
+    analysis_result_.decl_to_node_[matched_decl] = node_ptr;
 
     // Find or create the proper parent in the hierarchy
     ASTNode *parent = find_or_create_parent(matched_decl, ctx);
@@ -98,14 +99,15 @@ ASTNode *ASTMatcherCallback::find_or_create_parent(const clang::Decl *decl,
                        dyn_cast<clang::FunctionDecl>(parent_context)) {
             parent_decl = func_decl;
         } else if (parent_context->isTranslationUnit()) {
+            // Reached the translation unit - use root
             // isa<clang::TranslationUnitDecl>(parent_context)
             return analysis_result_.root.get();
         }
 
         if (parent_decl) {
             // Check if we already have a node for this parent
-            auto it = decl_to_node_.find(parent_decl);
-            if (it != decl_to_node_.end()) {
+            auto it = analysis_result_.decl_to_node_.find(parent_decl);
+            if (it != analysis_result_.decl_to_node_.end()) {
                 return it->second;
             }
 
@@ -113,7 +115,7 @@ ASTNode *ASTMatcherCallback::find_or_create_parent(const clang::Decl *decl,
             auto parent_node = create_node_from_decl(parent_decl, context);
             if (parent_node) {
                 ASTNode *parent_ptr = parent_node.get();
-                decl_to_node_[parent_decl] = parent_ptr;
+                analysis_result_.decl_to_node_[parent_decl] = parent_ptr;
 
                 // Recursively find the parent's parent
                 ASTNode *grandparent =

@@ -26,6 +26,10 @@ class FieldDecl;
 struct ASTAnalysisResult {
     std::unique_ptr<ASTNode> root;
     std::vector<ASTAnalysisError> errors;
+
+    // Track seen nodes to avoid duplicates
+    std::unordered_map<const clang::Decl *, ASTNode *> decl_to_node_;
+
     size_t nodes_processed = 0;
     size_t functions_found = 0;
     size_t classes_found = 0;
