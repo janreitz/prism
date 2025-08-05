@@ -47,6 +47,7 @@ template <treemap::TreeNode T> class TreeMapWidget
     const T *selected_node_ = nullptr;
     const T *hovered_node_ = nullptr;
 
+    ImVec2 canvas_size_ = {0.0F, 0.0F};
     treemap::Layout<T> layout_;
 
     // Rendering methods
@@ -94,18 +95,25 @@ bool TreeMapWidget<T>::render(const char *label, const ImVec2 &size,
     ImGui::BeginChild(label, size, ImGuiChildFlags_ResizeY);
 
     ImVec2 canvas_pos = ImGui::GetCursorScreenPos();
-    ImVec2 canvas_size = ImGui::GetContentRegionAvail();
+    ImVec2 current_canvas_size = ImGui::GetContentRegionAvail();
+
+    if (current_canvas_size.x <= 0.0F || current_canvas_size.y <= 0.0F) {
+        std::cerr << "Can't render treemap in canvas of size ("
+                  << current_canvas_size.x << " | " << current_canvas_size.y
+                  << ")\n";
+        return false;
+    }
+
+    // Only layout if canvas size changed
+    if (current_canvas_size.x != canvas_size_.x ||
+        current_canvas_size.y != canvas_size_.y) {
+        treemap::Rect available_rect{0, 0, canvas_size_.x, canvas_size_.y};
+        layout_ = treemap::layout(root_.get(), available_rect, parallelize);
+        canvas_size_ = current_canvas_size;
+    }
+
     ImDrawList *draw_list = ImGui::GetWindowDrawList();
-
-    // Ensure minimum canvas size to prevent zero-sized InvisibleButton
-    canvas_size.x = std::max(canvas_size.x, 10.0f);
-    canvas_size.y = std::max(canvas_size.y, 10.0f);
-
-    // Calculate layout and get rendered rectangles directly
-    treemap::Rect available_rect{0, 0, canvas_size.x, canvas_size.y};
-    layout_ = treemap::layout(root_.get(), available_rect, parallelize);
-
-    ImGui::InvisibleButton("treemap_canvas", canvas_size);
+    ImGui::InvisibleButton("treemap_canvas", canvas_size_);
 
     if (ImGui::IsItemHovered()) {
 
