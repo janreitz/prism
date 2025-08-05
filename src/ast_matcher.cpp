@@ -78,21 +78,8 @@ ASTNode *ASTMatcherCallback::find_or_create_parent(const clang::Decl *decl,
 
     while (parent_context) {
         // Convert DeclContext back to Decl if it represents a declaration
-        const clang::Decl *parent_decl = nullptr;
-
-        if (parent_context->isNamespace()) {
-            parent_decl = dyn_cast<clang::NamespaceDecl>(parent_context);
-        } else if (const auto *class_decl =
-                       dyn_cast<clang::CXXRecordDecl>(parent_context)) {
-            parent_decl = class_decl;
-        } else if (const auto *func_decl =
-                       dyn_cast<clang::FunctionDecl>(parent_context)) {
-            parent_decl = func_decl;
-        } else if (parent_context->isTranslationUnit()) {
-            // Reached the translation unit - use root
-            // isa<clang::TranslationUnitDecl>(parent_context)
-            return analysis_result_.root.get();
-        }
+        // Direct cast to NamedDecl
+        const auto *parent_decl = dyn_cast<clang::Decl>(parent_context);
 
         if (parent_decl) {
             // Check if we already have a node for this parent
