@@ -74,9 +74,7 @@ size_t ASTNode::locs() const { return locs_; }
 
 std::string ASTNode::name() const
 {
-    if (!clang_decl_) {
-        return "TranslationUnit";
-    } else if (const auto *named_decl = dyn_cast<NamedDecl>(clang_decl_)) {
+    if (const auto *named_decl = dyn_cast<NamedDecl>(clang_decl_)) {
         return named_decl->getNameAsString();
     } else {
         return "unnamed";
