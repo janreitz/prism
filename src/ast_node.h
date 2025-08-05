@@ -69,6 +69,7 @@ class ASTNode
     // Single source of truth: everything derived from clang_decl_
     // IMPORTANT: clang_decl_ is only valid while the owning ASTUnit is alive
     const clang::Decl *clang_decl_;
+    clang::ASTContext *ctx_;
 
     // Cache lines of code (computed once during construction for fast size()
     // calls)

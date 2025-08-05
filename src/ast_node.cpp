@@ -14,7 +14,7 @@
 using namespace clang;
 
 ASTNode::ASTNode(const clang::Decl *decl, clang::ASTContext *context)
-    : clang_decl_(decl),
+    : clang_decl_(decl), ctx_(ctx_),
       locs_(calculate_lines_of_code(decl, &context->getSourceManager()))
 {
 }
