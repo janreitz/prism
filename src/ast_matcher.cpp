@@ -64,51 +64,10 @@ void ASTMatcherCallback::run(const MatchFinder::MatchResult &Result)
     analysis_result_.decl_to_node_[matched_decl] = temp_node.get();
 
     // Find or create the proper parent in the hierarchy
-    ASTNode *parent = find_or_create_parent(matched_decl, ctx);
+    ASTNode *parent = analysis_result_.find_or_create_parent(matched_decl, ctx);
     parent->add_child(std::move(temp_node));
 
     analysis_result_.nodes_processed++;
-}
-
-ASTNode *ASTMatcherCallback::find_or_create_parent(const clang::Decl *decl,
-                                                   clang::ASTContext *context)
-{
-    // Walk up the parent chain to find the proper hierarchical parent
-    const clang::DeclContext *parent_context = decl->getDeclContext();
-
-    while (parent_context) {
-        // Convert DeclContext back to Decl if it represents a declaration
-        // Direct cast to NamedDecl
-        const auto *parent_decl = dyn_cast<clang::Decl>(parent_context);
-
-        if (parent_decl) {
-            // Check if we already have a node for this parent
-            auto it = analysis_result_.decl_to_node_.find(parent_decl);
-            if (it != analysis_result_.decl_to_node_.end()) {
-                return it->second;
-            }
-
-            // Create parent node if it doesn't exist
-            auto parent_node = create_node_from_decl(parent_decl, context);
-            if (parent_node) {
-                ASTNode *parent_ptr = parent_node.get();
-                analysis_result_.decl_to_node_[parent_decl] = parent_ptr;
-
-                // Recursively find the parent's parent
-                ASTNode *grandparent =
-                    find_or_create_parent(parent_decl, context);
-                grandparent->add_child(std::move(parent_node));
-
-                return parent_ptr;
-            }
-        }
-
-        // Move up the hierarchy
-        parent_context = parent_context->getParent();
-    }
-
-    // Fallback to root if no proper parent found
-    return analysis_result_.root.get();
 }
 
 ASTAnalysisResult

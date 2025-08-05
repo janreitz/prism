@@ -45,6 +45,9 @@ struct ASTAnalysisResult {
     size_t max_size = 0;
     size_t total_size = 0;
 
+    ASTNode *find_or_create_parent(const clang::Decl *decl,
+                                   clang::ASTContext *context);
+
     bool has_errors() const { return !errors.empty(); }
     double success_rate() const
     {
