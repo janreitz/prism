@@ -7,7 +7,9 @@
 #include "clang/Tooling/CompilationDatabase.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cstring>
+#include <expected>
 #include <iostream>
+#include <regex>
 
 ASTMatcherView::ASTMatcherView()
 {
@@ -256,16 +258,73 @@ void ASTMatcherView::render_project_input()
         ImGui::EndDisabled();
     }
 
-    // Show compilation database status
     if (compilation_db_) {
-        auto files = compilation_db_->getAllFiles();
-        ImGui::TextColored(
-            ImVec4(0, 1, 0, 1),
-            "Compilation database loaded, found %zu source files",
-            files.size());
+        auto source_files_ = compilation_db_->getAllFiles();
+        const std::string node_label = "Compilation database loaded, found " +
+                                       std::to_string(source_files_.size()) +
+                                       " source files";
+
+        if (ImGui::TreeNode(node_label.c_str())) {
+            ImGui::Indent();
+
+            std::sort(source_files_.begin(), source_files_.end());
+
+            for (const auto &file : source_files_) {
+                ImGui::Text(file.c_str());
+            }
+
+            ImGui::Unindent();
+            ImGui::TreePop();
+        }
+
+        static std::array<char, 256> filter_expression;
+        ImGui::InputText("Filter files", filter_expression.data(),
+                         sizeof(filter_expression));
+
+        // apply_filter
+        const auto maybe_pattern =
+            []() -> std::expected<std::regex, std::string> {
+            try {
+                return std::regex(filter_expression.data(),
+                                  std::regex_constants::icase);
+
+            } catch (const std::regex_error &e) {
+                return std::unexpected("Error parsing regex: \"" +
+                                       std::string(filter_expression.data()) +
+                                       "\": " + e.what());
+            }
+        }();
+
+        if (maybe_pattern.has_value()) {
+            const auto pattern = maybe_pattern.value();
+            auto remove_iter =
+                std::remove_if(source_files_.begin(), source_files_.end(),
+                               [&pattern](const std::string &file) {
+                                   return !std::regex_search(file, pattern);
+                               });
+            source_files_.erase(remove_iter, source_files_.end());
+        } else {
+            ImGui::Text(maybe_pattern.error().c_str());
+        }
+
+        const std::string filter_result_label =
+            "Filter results in " + std::to_string(source_files_.size()) +
+            " source files";
+        if (ImGui::TreeNode(filter_result_label.c_str())) {
+            ImGui::Indent();
+
+            for (const auto &file : source_files_) {
+                ImGui::Text(file.c_str());
+            }
+
+            ImGui::Unindent();
+            ImGui::TreePop();
+        }
     }
 
-    if (!compilation_db_) {
+    const bool ast_parsing_possible = !compilation_db_ || source_files_.empty();
+
+    if (!ast_parsing_possible) {
         ImGui::BeginDisabled();
     }
 
@@ -273,7 +332,7 @@ void ASTMatcherView::render_project_input()
         selected_node_ = nullptr;
 
         auto ast_units_ = prism::ast_generation::parse_project_asts(
-            *compilation_db_, project_root);
+            *compilation_db_, source_files_);
     }
 
     if (!ast_units_.empty()) {
@@ -281,7 +340,7 @@ void ASTMatcherView::render_project_input()
                            ast_units_.size());
     }
 
-    if (!compilation_db_) {
+    if (!ast_parsing_possible) {
         ImGui::EndDisabled();
     }
 }

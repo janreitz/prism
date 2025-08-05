@@ -3,6 +3,8 @@
 #include <clang/Basic/Diagnostic.h>
 #include <clang/Tooling/Tooling.h>
 
+#include "llvm/ADT/STLExtras.h"
+
 #include <iostream>
 #include <source_location>
 #include <string>
@@ -27,7 +29,8 @@ class MyDiagnosticConsumer : public clang::DiagnosticConsumer
     void BeginSourceFile(const clang::LangOptions &LangOpts,
                          const clang::Preprocessor *PP = nullptr) override
     {
-        std::cerr << "Starting to process file number " << file_count_++;
+        std::cerr << "Starting to process file number " << file_count_++
+                  << std::endl;
 
         if (PP) {
             auto &SM = PP->getSourceManager();
@@ -76,11 +79,9 @@ class MyDiagnosticConsumer : public clang::DiagnosticConsumer
 
 std::vector<std::unique_ptr<clang::ASTUnit>>
 parse_project_asts(const clang::tooling::CompilationDatabase &compilation_db,
-                   const std::filesystem::path &project_root)
+                   const std::vector<std::string> &source_files)
 {
-
-    clang::tooling::ClangTool tool(compilation_db,
-                                   compilation_db.getAllFiles());
+    clang::tooling::ClangTool tool(compilation_db, source_files);
 
     MyDiagnosticConsumer diag_consumer;
     tool.setDiagnosticConsumer(&diag_consumer);

@@ -32,6 +32,6 @@ using ProgressCallback = std::function<void(
 
 std::vector<std::unique_ptr<clang::ASTUnit>>
 parse_project_asts(const clang::tooling::CompilationDatabase &compilation_db,
-                   const std::filesystem::path &project_root);
+                   const std::vector<std::string> &source_files);
 
 } // namespace prism::ast_generation
