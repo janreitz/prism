@@ -2,6 +2,8 @@
 
 #include "ast_node.h"
 
+#include <clang/AST/ASTContext.h>
+
 #include <algorithm>
 #include <cstddef>
 #include <variant>
@@ -46,7 +48,8 @@ struct ASTAnalysisResult {
     size_t total_size = 0;
 
     ASTNode *find_or_create_parent(const clang::Decl *decl,
-                                   clang::ASTContext *context);
+                                   const clang::ASTContext *context);
+    void add_decl(const clang::Decl *decl, const clang::ASTContext &ctx);
 
     bool has_errors() const { return !errors.empty(); }
     double success_rate() const
@@ -77,7 +80,7 @@ struct NamespaceMetrics {
 
 // Pure metric computation functions - no variant needed
 FunctionMetrics compute_function_metrics(const clang::FunctionDecl *func_decl,
-                                         clang::ASTContext &ctx);
+                                         const clang::ASTContext &ctx);
 
 ClassMetrics compute_class_metrics(const clang::CXXRecordDecl *class_decl,
                                    clang::ASTContext &ctx);

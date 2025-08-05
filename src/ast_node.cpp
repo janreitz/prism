@@ -13,7 +13,7 @@
 
 using namespace clang;
 
-ASTNode::ASTNode(const clang::Decl *decl, clang::ASTContext *context)
+ASTNode::ASTNode(const clang::Decl *decl, const clang::ASTContext *context)
     : clang_decl_(decl), ctx_(ctx_),
       locs_(calculate_lines_of_code(decl, &context->getSourceManager()))
 {
@@ -120,7 +120,7 @@ clang::SourceLocation ASTNode::source_location() const
 }
 
 size_t calculate_lines_of_code(const clang::Decl *decl,
-                               clang::SourceManager *sm)
+                               const clang::SourceManager *sm)
 {
     if (!decl || !sm)
         return 1;
@@ -165,7 +165,7 @@ std::string format_source_location(const clang::SourceManager &sm,
 }
 
 std::unique_ptr<ASTNode> create_node_from_decl(const Decl *decl,
-                                               ASTContext *context)
+                                               const ASTContext *context)
 {
     if (!decl)
         return nullptr;

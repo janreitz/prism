@@ -1,6 +1,5 @@
 #include "ast_metrics.h"
 
-#include <clang/AST/ASTContext.h>
 #include <clang/AST/Decl.h>
 #include <clang/AST/DeclCXX.h>
 #include <clang/AST/Expr.h>
@@ -17,8 +16,38 @@ ASTAnalysisResult::ASTAnalysisResult(ASTContext &ctx)
     decl_to_node_.insert({root->clang_decl(), root.get()});
 }
 
-ASTNode *ASTAnalysisResult::find_or_create_parent(const clang::Decl *decl,
-                                                  clang::ASTContext *context)
+void ASTAnalysisResult::add_decl(const clang::Decl *decl,
+                                 const clang::ASTContext &ctx)
+{
+    if (decl_to_node_.find(decl) != decl_to_node_.end()) {
+        return;
+    }
+
+    // Track this node to avoid duplicates
+    auto temp_node = std::make_unique<ASTNode>(decl, &ctx);
+    decl_to_node_[decl] = temp_node.get();
+
+    // Try to match different node types
+    if (const auto *func_decl = dyn_cast<FunctionDecl>(decl)) {
+        functions_found++;
+
+        const auto func_metrics = compute_function_metrics(func_decl, ctx);
+        max_complexity =
+            std::max(max_complexity, func_metrics.cyclomatic_complexity);
+        min_complexity =
+            std::min(min_complexity, func_metrics.cyclomatic_complexity);
+    }
+
+    // Find or create the proper parent in the hierarchy
+    ASTNode *parent = find_or_create_parent(decl, &ctx);
+    parent->add_child(std::move(temp_node));
+
+    nodes_processed++;
+}
+
+ASTNode *
+ASTAnalysisResult::find_or_create_parent(const clang::Decl *decl,
+                                         const clang::ASTContext *context)
 {
     // Walk up the parent chain to find the proper hierarchical parent
     const clang::DeclContext *parent_context = decl->getDeclContext();
@@ -95,7 +124,7 @@ size_t count_decision_points(const clang::Stmt *stmt)
 }
 
 FunctionMetrics compute_function_metrics(const clang::FunctionDecl *func_decl,
-                                         clang::ASTContext &ctx)
+                                         const clang::ASTContext &ctx)
 {
     FunctionMetrics metrics;
 

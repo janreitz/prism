@@ -39,7 +39,7 @@ struct ASTAnalysisError {
 class ASTNode
 {
   public:
-    explicit ASTNode(const clang::Decl *decl, clang::ASTContext *context);
+    explicit ASTNode(const clang::Decl *decl, const clang::ASTContext *context);
 
     void add_child(std::unique_ptr<ASTNode> &&child);
 
@@ -68,18 +68,19 @@ class ASTNode
     // Single source of truth: everything derived from clang_decl_
     // IMPORTANT: clang_decl_ is only valid while the owning ASTUnit is alive
     const clang::Decl *clang_decl_;
-    clang::ASTContext *ctx_;
+    const clang::ASTContext *ctx_;
 
     // Cache lines of code (computed once during construction for fast size()
     // calls)
     size_t locs_;
 };
 
-std::unique_ptr<ASTNode> create_node_from_decl(const clang::Decl *decl,
-                                               clang::ASTContext *context);
+std::unique_ptr<ASTNode>
+create_node_from_decl(const clang::Decl *decl,
+                      const clang::ASTContext *context);
 
 size_t calculate_lines_of_code(const clang::Decl *decl,
-                               clang::SourceManager *sm);
+                               const clang::SourceManager *sm);
 
 std::string format_source_location(const clang::SourceManager &sm,
                                    const clang::SourceLocation &src_loc);
