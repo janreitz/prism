@@ -133,12 +133,6 @@ int main() {
     std::strncpy(source_buffer_, source_code_.c_str(),
                  sizeof(source_buffer_) - 1);
     source_buffer_[sizeof(source_buffer_) - 1] = '\0';
-
-    error_message_.clear();
-    selected_node_ = nullptr; // Clear selection on new analysis
-    ast_units_.clear();
-    ast_units_.push_back(prism::ast_generation::parse_ast_from_string(
-        source_code_, args_, filename_));
 }
 
 bool ASTMatcherView::render()
@@ -185,6 +179,10 @@ void ASTMatcherView::render_source_input()
     } else {
         render_project_input();
     }
+    if (!ast_units_.empty()) {
+        ImGui::TextColored(ImVec4(0, 1, 0, 1), "Parsed %zu translation units",
+                           ast_units_.size());
+    }
 }
 
 void ASTMatcherView::render_string_input()
@@ -209,10 +207,13 @@ void ASTMatcherView::render_string_input()
     if (ImGui::Button("Parse AST")) {
         source_code_ = std::string(source_buffer_);
         error_message_.clear();
-        selected_node_ = nullptr; // Clear selection on new analysis
-        ast_units_.clear();
-        ast_units_.push_back(prism::ast_generation::parse_ast_from_string(
-            source_code_, args_, filename_));
+        selected_node_ = nullptr;
+        auto new_ast_unit = prism::ast_generation::parse_ast_from_string(
+            source_code_, args_, filename_);
+        if (new_ast_unit) {
+            ast_units_.clear();
+            ast_units_.push_back(std::move(new_ast_unit));
+        }
     }
 }
 
@@ -264,13 +265,13 @@ void ASTMatcherView::render_project_input()
                                        std::to_string(source_files_.size()) +
                                        " source files";
 
-        if (ImGui::TreeNode(node_label.c_str())) {
+        if (ImGui::TreeNode("%s", node_label.c_str())) {
             ImGui::Indent();
 
             std::sort(source_files_.begin(), source_files_.end());
 
             for (const auto &file : source_files_) {
-                ImGui::Text(file.c_str());
+                ImGui::Text("%s", file.c_str());
             }
 
             ImGui::Unindent();
@@ -304,7 +305,7 @@ void ASTMatcherView::render_project_input()
                                });
             source_files_.erase(remove_iter, source_files_.end());
         } else {
-            ImGui::Text(maybe_pattern.error().c_str());
+            ImGui::Text("%s", maybe_pattern.error().c_str());
         }
 
         const std::string filter_result_label =
@@ -314,7 +315,7 @@ void ASTMatcherView::render_project_input()
             ImGui::Indent();
 
             for (const auto &file : source_files_) {
-                ImGui::Text(file.c_str());
+                ImGui::Text("%s", file.c_str());
             }
 
             ImGui::Unindent();
@@ -334,12 +335,6 @@ void ASTMatcherView::render_project_input()
         auto ast_units_ = prism::ast_generation::parse_project_asts(
             *compilation_db_, source_files_);
     }
-
-    if (!ast_units_.empty()) {
-        ImGui::TextColored(ImVec4(0, 1, 0, 1), "Parsed %zu translation units",
-                           ast_units_.size());
-    }
-
     if (!ast_parsing_possible) {
         ImGui::EndDisabled();
     }
