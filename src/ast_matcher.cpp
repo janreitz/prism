@@ -25,15 +25,6 @@ ASTMatcherCallback::ASTMatcherCallback(ASTAnalysisResult &result)
 void ASTMatcherCallback::run(const MatchFinder::MatchResult &Result)
 {
     ASTContext *ctx = Result.Context;
-
-    // Ensure we have a root node
-    if (!analysis_result_.root) {
-        analysis_result_.root =
-            std::make_unique<ASTNode>(ctx->getTranslationUnitDecl(), ctx);
-        analysis_result_.decl_to_node_[nullptr] =
-            analysis_result_.root.get(); // Map translation unit
-    }
-
     const Decl *matched_decl = nullptr;
 
     // Try to match different node types
@@ -70,8 +61,7 @@ void ASTMatcherCallback::run(const MatchFinder::MatchResult &Result)
     }
     // Track this node to avoid duplicates
     auto temp_node = std::make_unique<ASTNode>(matched_decl, ctx);
-    ASTNode *node_ptr = temp_node.get();
-    analysis_result_.decl_to_node_[matched_decl] = node_ptr;
+    analysis_result_.decl_to_node_[matched_decl] = temp_node.get();
 
     // Find or create the proper parent in the hierarchy
     ASTNode *parent = find_or_create_parent(matched_decl, ctx);
@@ -139,7 +129,7 @@ analyze_with_matcher(clang::ASTContext &ctx,
                      const clang::ast_matchers::DeclarationMatcher &matcher,
                      const std::string &filename)
 {
-    ASTAnalysisResult result;
+    ASTAnalysisResult result(ctx);
 
     try {
         clang::ast_matchers::MatchFinder finder;
@@ -148,11 +138,6 @@ analyze_with_matcher(clang::ASTContext &ctx,
         finder.addMatcher(matcher, &callback);
 
         finder.matchAST(ctx);
-
-        if (!result.root) {
-            result.root = std::make_unique<ASTNode>(nullptr, &ctx);
-        }
-
     } catch (const std::exception &e) {
         result.errors.push_back(ASTAnalysisError{e.what(), filename});
     }

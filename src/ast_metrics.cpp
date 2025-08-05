@@ -11,6 +11,12 @@
 
 using namespace clang;
 
+ASTAnalysisResult::ASTAnalysisResult(ASTContext &ctx)
+    : root(std::make_unique<ASTNode>(ctx.getTranslationUnitDecl(), &ctx))
+{
+    decl_to_node_.insert({root->clang_decl(), root.get()});
+}
+
 size_t count_statements(const clang::Stmt *stmt)
 {
     if (!stmt)
