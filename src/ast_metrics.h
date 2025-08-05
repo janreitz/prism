@@ -31,7 +31,7 @@ struct ASTAnalysisResult {
     std::vector<ASTAnalysisError> errors;
 
     // Track seen nodes to avoid duplicates
-    std::unordered_map<std::string, ASTNode *> decl_to_node_;
+    std::unordered_map<std::string, ASTNode *> qualified_name_to_nodes_;
 
     size_t nodes_processed = 0;
     size_t functions_found = 0;
@@ -47,9 +47,9 @@ struct ASTAnalysisResult {
     size_t max_size = 0;
     size_t total_size = 0;
 
-    ASTNode *find_or_create_parent(const clang::Decl *decl,
-                                   const clang::ASTContext *context);
-    void add_decl(const clang::Decl *decl, const clang::ASTContext &ctx);
+    ASTNode *get_or_create_node(const clang::Decl *decl,
+                                const clang::ASTContext &ctx);
+    void update_metrics(const ASTNode *node, const clang::ASTContext &context);
 
     bool has_errors() const { return !errors.empty(); }
     double success_rate() const

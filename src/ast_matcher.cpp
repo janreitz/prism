@@ -24,8 +24,10 @@ ASTMatcherCallback::ASTMatcherCallback(ASTAnalysisResult &result)
 
 void ASTMatcherCallback::run(const MatchFinder::MatchResult &Result)
 {
-    analysis_result_.add_decl(Result.Nodes.getNodeAs<Decl>("function"),
-                              *Result.Context);
+    if (const auto *func_decl =
+            Result.Nodes.getNodeAs<FunctionDecl>("function")) {
+        analysis_result_.get_or_create_node(func_decl, *Result.Context);
+    }
 }
 
 ASTAnalysisResult

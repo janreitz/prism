@@ -13,91 +13,77 @@ using namespace clang;
 ASTAnalysisResult::ASTAnalysisResult(ASTContext &ctx)
     : root(std::make_unique<ASTNode>(ctx.getTranslationUnitDecl(), &ctx))
 {
-    const auto *named_decl =
-        clang::dyn_cast<clang::NamedDecl>(root->clang_decl());
+    // Associate TranslationUnit with filename since it is not a NamedDecl
+    auto &source_manager = ctx.getSourceManager();
+    auto main_file_id = source_manager.getMainFileID();
 
-    const auto qualified_name =
-        named_decl ? named_decl->getQualifiedNameAsString() : "";
-    decl_to_node_.insert({qualified_name, root.get()});
+    std::string filename;
+    if (main_file_id.isValid()) {
+        if (const auto maybe_file_entry =
+                source_manager.getFileEntryRefForID(main_file_id)) {
+            filename = (*maybe_file_entry).getName().str();
+        }
+    }
+
+    // Use filename as the key for TranslationUnit
+    if (filename.empty()) {
+        filename = "<translation_unit>"; // Fallback
+    }
+
+    qualified_name_to_nodes_.insert({filename, root.get()});
 }
 
-void ASTAnalysisResult::add_decl(const clang::Decl *decl,
-                                 const clang::ASTContext &ctx)
+ASTNode *ASTAnalysisResult::get_or_create_node(const clang::Decl *decl,
+                                               const clang::ASTContext &ctx)
 {
-    const auto *named_decl = clang::dyn_cast<clang::NamedDecl>(decl);
-    const auto qualified_name = named_decl->getQualifiedNameAsString();
+    if (decl == root->clang_decl()) {
+        return root.get();
+    }
+    auto *named_decl = clang::dyn_cast<clang::NamedDecl>(decl);
+    if (!named_decl) {
+        // Skip over unnamed decls
+        const clang::DeclContext *parent_context = decl->getDeclContext();
+        return get_or_create_node(dyn_cast<clang::Decl>(parent_context), ctx);
+    }
 
     // Avoid duplicates
-    if (decl_to_node_.find(qualified_name) != decl_to_node_.end()) {
-        return;
+    const auto qualified_name = named_decl->getQualifiedNameAsString();
+    auto found_iter = qualified_name_to_nodes_.find(qualified_name);
+    if (found_iter != qualified_name_to_nodes_.end()) {
+        return found_iter->second;
     }
 
     auto temp_node = std::make_unique<ASTNode>(decl, &ctx);
-    decl_to_node_[qualified_name] = temp_node.get();
+    auto temp_node_ptr = temp_node.get();
+    qualified_name_to_nodes_[qualified_name] = temp_node_ptr;
 
+    update_metrics(temp_node_ptr, ctx);
+
+    // Walk up the parent chain to find the proper hierarchical parent
+    const clang::DeclContext *parent_context = decl->getDeclContext();
+    auto *parent_node =
+        get_or_create_node(dyn_cast<clang::Decl>(parent_context), ctx);
+    parent_node->add_child(std::move(temp_node));
+
+    return temp_node_ptr;
+}
+
+void ASTAnalysisResult::update_metrics(const ASTNode *node,
+                                       const clang::ASTContext &context)
+{
+    const auto *decl = node->clang_decl();
+
+    nodes_processed++;
     // Try to match different node types
     if (const auto *func_decl = dyn_cast<FunctionDecl>(decl)) {
         functions_found++;
 
-        const auto func_metrics = compute_function_metrics(func_decl, ctx);
+        const auto func_metrics = compute_function_metrics(func_decl, context);
         max_complexity =
             std::max(max_complexity, func_metrics.cyclomatic_complexity);
         min_complexity =
             std::min(min_complexity, func_metrics.cyclomatic_complexity);
     }
-
-    // Find or create the proper parent in the hierarchy
-    ASTNode *parent = find_or_create_parent(decl, &ctx);
-    parent->add_child(std::move(temp_node));
-
-    nodes_processed++;
-}
-
-ASTNode *
-ASTAnalysisResult::find_or_create_parent(const clang::Decl *decl,
-                                         const clang::ASTContext *context)
-{
-    // Walk up the parent chain to find the proper hierarchical parent
-    const clang::DeclContext *parent_context = decl->getDeclContext();
-
-    while (parent_context) {
-        // Convert DeclContext back to Decl if it represents a declaration
-        // Direct cast to NamedDecl
-        const auto *parent_decl = dyn_cast<clang::Decl>(parent_context);
-
-        if (parent_decl) {
-            // Check if we already have a node for this parent
-            const auto *named_decl =
-                clang::dyn_cast<clang::NamedDecl>(parent_decl);
-            const auto qualified_name =
-                named_decl ? named_decl->getQualifiedNameAsString() : "";
-
-            auto it = decl_to_node_.find(qualified_name);
-            if (it != decl_to_node_.end()) {
-                return it->second;
-            }
-
-            // Create parent node if it doesn't exist
-            auto parent_node = create_node_from_decl(parent_decl, context);
-            if (parent_node) {
-                ASTNode *parent_ptr = parent_node.get();
-                decl_to_node_[qualified_name] = parent_ptr;
-
-                // Recursively find the parent's parent
-                ASTNode *grandparent =
-                    find_or_create_parent(parent_decl, context);
-                grandparent->add_child(std::move(parent_node));
-
-                return parent_ptr;
-            }
-        }
-
-        // Move up the hierarchy
-        parent_context = parent_context->getParent();
-    }
-
-    // Fallback to root if no proper parent found
-    return root.get();
 }
 
 size_t count_statements(const clang::Stmt *stmt)
