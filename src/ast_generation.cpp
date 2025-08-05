@@ -87,7 +87,19 @@ parse_project_asts(const clang::tooling::CompilationDatabase &compilation_db,
     tool.setDiagnosticConsumer(&diag_consumer);
 
     std::vector<std::unique_ptr<clang::ASTUnit>> ast_units;
-    tool.buildASTs(ast_units);
+    int result_code = tool.buildASTs(ast_units);
+
+    std::cerr << std::source_location().function_name() << ": ";
+    if (result_code == 0) {
+        std::cerr << "Parsing success, parsed " << ast_units.size()
+                  << "Translation units" << std::endl;
+    } else if (result_code == 1) {
+        std::cerr << "Any error occurred" << std::endl;
+    } else if (result_code == 2) {
+        std::cerr << "There is no error but some files are skipped due to "
+                     "missing compile commands."
+                  << std::endl;
+    }
     return ast_units;
 }
 

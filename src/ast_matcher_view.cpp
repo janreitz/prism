@@ -260,7 +260,7 @@ void ASTMatcherView::render_project_input()
     }
 
     if (compilation_db_) {
-        auto source_files_ = compilation_db_->getAllFiles();
+        source_files_ = compilation_db_->getAllFiles();
         const std::string node_label = "Compilation database loaded, found " +
                                        std::to_string(source_files_.size()) +
                                        " source files";
@@ -323,7 +323,7 @@ void ASTMatcherView::render_project_input()
         }
     }
 
-    const bool ast_parsing_possible = !compilation_db_ || source_files_.empty();
+    const bool ast_parsing_possible = compilation_db_ && !source_files_.empty();
 
     if (!ast_parsing_possible) {
         ImGui::BeginDisabled();
@@ -331,9 +331,8 @@ void ASTMatcherView::render_project_input()
 
     if (ImGui::Button("Parse ASTs")) {
         selected_node_ = nullptr;
-
-        auto ast_units_ = prism::ast_generation::parse_project_asts(
-            *compilation_db_, source_files_);
+        ast_units_ = prism::ast_generation::parse_project_asts(*compilation_db_,
+                                                               source_files_);
     }
     if (!ast_parsing_possible) {
         ImGui::EndDisabled();
