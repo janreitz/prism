@@ -24,7 +24,6 @@ class FieldDecl;
 } // namespace clang
 
 struct ASTAnalysisResult {
-    ASTAnalysisResult() = default;
     ASTAnalysisResult(clang::ASTContext &ctx);
     std::unique_ptr<ASTNode> root;
     std::vector<ASTAnalysisError> errors;

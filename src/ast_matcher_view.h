@@ -39,7 +39,7 @@ class ASTMatcherView
 
     // Analysis results
     std::vector<std::unique_ptr<clang::ASTUnit>> ast_units_;
-    ASTAnalysisResult analysis_result_;
+    std::optional<ASTAnalysisResult> analysis_result_;
     std::unique_ptr<TreeMapWidget<ASTNode>> treemap_;
 
     // UI state
