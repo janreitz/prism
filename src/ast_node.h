@@ -39,8 +39,7 @@ struct ASTAnalysisError {
 class ASTNode
 {
   public:
-    explicit ASTNode(const clang::Decl *decl = nullptr,
-                     clang::ASTContext *context = nullptr);
+    explicit ASTNode(const clang::Decl *decl, clang::ASTContext *context);
 
     void add_child(std::unique_ptr<ASTNode> &&child);
 
