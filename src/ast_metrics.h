@@ -23,7 +23,6 @@ class CXXMethodDecl;
 class FieldDecl;
 } // namespace clang
 
-// Analysis result with error tracking (similar to AnalysisResult)
 struct ASTAnalysisResult {
     std::unique_ptr<ASTNode> root;
     std::vector<ASTAnalysisError> errors;
