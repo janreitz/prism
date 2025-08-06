@@ -35,7 +35,7 @@ analyze_with_matcher(clang::ASTContext &ctx,
                      const clang::ast_matchers::DeclarationMatcher &matcher,
                      const std::string &filename)
 {
-    ASTAnalysis result(ctx);
+    ASTAnalysis result;
 
     try {
         clang::ast_matchers::MatchFinder finder;

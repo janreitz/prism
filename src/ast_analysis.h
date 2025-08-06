@@ -27,7 +27,7 @@ class FieldDecl;
 class ASTAnalysis
 {
   public:
-    ASTAnalysis(clang::ASTContext &ctx);
+    ASTAnalysis();
     void add_decl(const clang::Decl *decl, const clang::ASTContext &ctx);
 
     bool has_errors() const { return !errors.empty(); }

@@ -10,27 +10,8 @@
 
 using namespace clang;
 
-ASTAnalysis::ASTAnalysis(ASTContext &ctx)
-    : root(std::make_unique<ASTNode>(ctx.getTranslationUnitDecl(), &ctx))
+ASTAnalysis::ASTAnalysis() : root(std::make_unique<ASTNode>(nullptr, nullptr))
 {
-    // Associate TranslationUnit with filename since it is not a NamedDecl
-    auto &source_manager = ctx.getSourceManager();
-    auto main_file_id = source_manager.getMainFileID();
-
-    std::string filename;
-    if (main_file_id.isValid()) {
-        if (const auto maybe_file_entry =
-                source_manager.getFileEntryRefForID(main_file_id)) {
-            filename = (*maybe_file_entry).getName().str();
-        }
-    }
-
-    // Use filename as the key for TranslationUnit
-    if (filename.empty()) {
-        filename = "<translation_unit>"; // Fallback
-    }
-
-    qualified_name_to_nodes_.insert({filename, root.get()});
 }
 
 void ASTAnalysis::add_decl(const clang::Decl *decl,
@@ -42,14 +23,19 @@ void ASTAnalysis::add_decl(const clang::Decl *decl,
 ASTNode *ASTAnalysis::get_or_create_node(const clang::Decl *decl,
                                          const clang::ASTContext &ctx)
 {
-    if (decl == root->clang_decl()) {
+    if (decl == nullptr) {
         return root.get();
     }
+
     auto *named_decl = clang::dyn_cast<clang::NamedDecl>(decl);
     if (!named_decl) {
         // Skip over unnamed decls
         const clang::DeclContext *parent_context = decl->getDeclContext();
-        return get_or_create_node(dyn_cast<clang::Decl>(parent_context), ctx);
+        assert(parent_context != nullptr ||
+               dyn_cast<DeclContext>(decl)->isTranslationUnit() &&
+                   "I assume only TUs have no DeclContext");
+        return get_or_create_node(dyn_cast_or_null<clang::Decl>(parent_context),
+                                  ctx);
     }
 
     // Avoid duplicates
@@ -67,8 +53,11 @@ ASTNode *ASTAnalysis::get_or_create_node(const clang::Decl *decl,
 
     // Walk up the parent chain to find the proper hierarchical parent
     const clang::DeclContext *parent_context = decl->getDeclContext();
+    assert(parent_context != nullptr ||
+           dyn_cast<DeclContext>(decl)->isTranslationUnit() &&
+               "I assume only TUs have no DeclContext");
     auto *parent_node =
-        get_or_create_node(dyn_cast<clang::Decl>(parent_context), ctx);
+        get_or_create_node(dyn_cast_or_null<clang::Decl>(parent_context), ctx);
     parent_node->add_child(std::move(temp_node));
 
     return temp_node_ptr;
@@ -190,8 +179,8 @@ NamespaceMetrics compute_namespace_metrics(const clang::Decl *decl,
     return metrics;
 }
 
-// TODO refactor so unit is not needed and complexity metrics don't have to be
-// recomputed each time
+// TODO refactor so unit is not needed and complexity metrics don't have to
+// be recomputed each time
 std::function<ImU32(const ASTNode &)>
 create_complexity_coloring_strategy(const ASTAnalysis &analysis_result,
                                     clang::ASTUnit *unit)
@@ -251,8 +240,8 @@ std::function<ImU32(const ASTNode &)> create_type_based_coloring_strategy()
             return IM_COL32(100, 150, 255, 255); // Blue
         // An instantiation or explicit specialization of a function
         // template.
-        // Note: this might have been instantiated from a templated class if it
-        // is a class-scope explicit specialization.
+        // Note: this might have been instantiated from a templated class if
+        // it is a class-scope explicit specialization.
         if (templated_kind == clang::FunctionDecl::TemplatedKind::
                                   TK_FunctionTemplateSpecialization)
             return IM_COL32(200, 100, 255, 255); // purple
