@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <limits>
+#include <unordered_set>
 
 // Forward declarations for Clang AST types
 namespace clang
@@ -29,7 +30,10 @@ class ASTAnalysis
   public:
     ASTAnalysis();
     void add_decl(const clang::Decl *decl, const clang::ASTContext *ctx);
+    void add_analyzed_tu(const clang::ASTUnit *tu);
 
+    bool tu_has_been_analyzed(const clang::ASTUnit *tu) const;
+    bool has_data() const { return !root->children().empty(); }
     bool has_errors() const { return !errors.empty(); }
     double success_rate() const
     {
@@ -62,6 +66,7 @@ class ASTAnalysis
 
     // Track seen nodes to avoid duplicates
     std::unordered_map<std::string, ASTNode *> qualified_name_to_nodes_;
+    std::unordered_set<const clang::ASTUnit *> analyzed_units_;
 };
 
 // Metric structures (unchanged from ast_node.h)

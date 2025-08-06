@@ -20,6 +20,16 @@ void ASTAnalysis::add_decl(const clang::Decl *decl,
     get_or_create_node(decl, ctx);
 }
 
+void ASTAnalysis::add_analyzed_tu(const clang::ASTUnit *tu)
+{
+    analyzed_units_.insert(tu);
+}
+
+bool ASTAnalysis::tu_has_been_analyzed(const clang::ASTUnit *tu) const
+{
+    return analyzed_units_.contains(tu);
+}
+
 ASTNode *ASTAnalysis::get_or_create_node(const clang::Decl *decl,
                                          const clang::ASTContext *ctx)
 {

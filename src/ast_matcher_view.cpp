@@ -374,20 +374,21 @@ bool ASTMatcherView::apply_matcher_to_source()
     try {
         std::cout << "Applying matcher: " << current_matcher_idx_ << std::endl;
 
-        analysis_result_ = analyze_with_matcher(
-            ast_units_.front()->getASTContext(),
-            predefined_matchers[current_matcher_idx_].second, filename_);
+        for (auto &ast_unit : ast_units_) {
+            analyze_with_matcher(
+                analysis_result_, ast_unit,
+                predefined_matchers[current_matcher_idx_].second, filename_);
+        }
 
-        if (analysis_result_.has_value()) {
-            const auto &analysis_result = analysis_result_.value();
-            treemap_ =
-                std::make_unique<TreeMapWidget<ASTNode>>(*analysis_result.root);
+        if (analysis_result_.has_data()) {
+            treemap_ = std::make_unique<TreeMapWidget<ASTNode>>(
+                *analysis_result_.root);
             update_coloring_strategy();
             register_treemap_callbacks();
 
             std::cout << "Match analysis completed: "
-                      << analysis_result.functions_found << " functions, "
-                      << analysis_result.classes_found << " classes found"
+                      << analysis_result_.functions_found << " functions, "
+                      << analysis_result_.classes_found << " classes found"
                       << std::endl;
             return true;
         } else {
@@ -435,22 +436,21 @@ void ASTMatcherView::render_interactive_info()
 
 void ASTMatcherView::render_statistics()
 {
-    if (!analysis_result_.has_value()) {
+    if (!analysis_result_.has_data()) {
         return;
     }
-    const auto &analysis_result = analysis_result_.value();
     ImGui::Text("Analysis Statistics");
 
-    if (analysis_result.has_errors()) {
+    if (analysis_result_.has_errors()) {
         ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.3f, 1.0f),
                            "Success Rate: %.1f%% (%zu/%zu nodes)",
-                           analysis_result.success_rate() * 100.0,
-                           analysis_result.nodes_processed -
-                               analysis_result.errors.size(),
-                           analysis_result.nodes_processed);
+                           analysis_result_.success_rate() * 100.0,
+                           analysis_result_.nodes_processed -
+                               analysis_result_.errors.size(),
+                           analysis_result_.nodes_processed);
 
         if (ImGui::TreeNode("Errors")) {
-            for (const auto &error : analysis_result.errors) {
+            for (const auto &error : analysis_result_.errors) {
                 ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "• %s",
                                    error.what.c_str());
             }
@@ -458,17 +458,18 @@ void ASTMatcherView::render_statistics()
         }
     } else {
         ImGui::Text("✓ All %zu nodes processed successfully",
-                    analysis_result.nodes_processed);
+                    analysis_result_.nodes_processed);
     }
 
-    ImGui::Text("Functions: %zu, Classes: %zu", analysis_result.functions_found,
-                analysis_result.classes_found);
+    ImGui::Text("Functions: %zu, Classes: %zu",
+                analysis_result_.functions_found,
+                analysis_result_.classes_found);
 
-    if (analysis_result.max_complexity > 0) {
+    if (analysis_result_.max_complexity > 0) {
         ImGui::Text("Complexity: %zu - %zu (total: %zu)",
-                    analysis_result.min_complexity,
-                    analysis_result.max_complexity,
-                    analysis_result.total_complexity);
+                    analysis_result_.min_complexity,
+                    analysis_result_.max_complexity,
+                    analysis_result_.total_complexity);
     }
 }
 
@@ -588,7 +589,7 @@ void ASTMatcherView::update_coloring_strategy()
         break;
     case ColoringMode::Complexity:
         treemap_->set_coloring_strategy(
-            create_complexity_coloring_strategy(analysis_result_.value()));
+            create_complexity_coloring_strategy(analysis_result_));
         break;
     }
 }

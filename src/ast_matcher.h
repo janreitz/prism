@@ -55,7 +55,7 @@ class ASTMatcherCallback
 };
 
 // Main ASTMatcher analysis function
-ASTAnalysis
-analyze_with_matcher(clang::ASTContext &ctx,
-                     const clang::ast_matchers::DeclarationMatcher &matcher,
-                     const std::string &filename = "source.cpp");
+void analyze_with_matcher(
+    ASTAnalysis &result, std::unique_ptr<clang::ASTUnit> &unit,
+    const clang::ast_matchers::DeclarationMatcher &matcher,
+    const std::string &filename = "source.cpp");

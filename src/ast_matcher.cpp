@@ -30,23 +30,21 @@ void ASTMatcherCallback::run(const MatchFinder::MatchResult &Result)
     }
 }
 
-ASTAnalysis
-analyze_with_matcher(clang::ASTContext &ctx,
-                     const clang::ast_matchers::DeclarationMatcher &matcher,
-                     const std::string &filename)
+void analyze_with_matcher(
+    ASTAnalysis &result, std::unique_ptr<clang::ASTUnit> &unit,
+    const clang::ast_matchers::DeclarationMatcher &matcher,
+    const std::string &filename)
 {
-    ASTAnalysis result;
-
+    if (result.tu_has_been_analyzed(unit.get())) {
+        return;
+    }
     try {
+        result.add_analyzed_tu(unit.get());
         clang::ast_matchers::MatchFinder finder;
         ASTMatcherCallback callback(result);
-
         finder.addMatcher(matcher, &callback);
-
-        finder.matchAST(ctx);
+        finder.matchAST(unit->getASTContext());
     } catch (const std::exception &e) {
         result.errors.push_back(ASTAnalysisError{e.what(), filename});
     }
-
-    return result;
 }
