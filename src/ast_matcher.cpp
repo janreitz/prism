@@ -26,7 +26,7 @@ void ASTMatcherCallback::run(const MatchFinder::MatchResult &Result)
 {
     if (const auto *func_decl =
             Result.Nodes.getNodeAs<FunctionDecl>("function")) {
-        analysis_result_.add_decl(func_decl, *Result.Context);
+        analysis_result_.add_decl(func_decl, Result.Context);
     }
 }
 

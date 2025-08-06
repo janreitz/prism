@@ -15,13 +15,13 @@ ASTAnalysis::ASTAnalysis() : root(std::make_unique<ASTNode>(nullptr, nullptr))
 }
 
 void ASTAnalysis::add_decl(const clang::Decl *decl,
-                           const clang::ASTContext &ctx)
+                           const clang::ASTContext *ctx)
 {
     get_or_create_node(decl, ctx);
 }
 
 ASTNode *ASTAnalysis::get_or_create_node(const clang::Decl *decl,
-                                         const clang::ASTContext &ctx)
+                                         const clang::ASTContext *ctx)
 {
     if (decl == nullptr) {
         return root.get();
@@ -45,11 +45,11 @@ ASTNode *ASTAnalysis::get_or_create_node(const clang::Decl *decl,
         return found_iter->second;
     }
 
-    auto temp_node = std::make_unique<ASTNode>(decl, &ctx);
+    auto temp_node = std::make_unique<ASTNode>(decl, ctx);
     auto temp_node_ptr = temp_node.get();
     qualified_name_to_nodes_[qualified_name] = temp_node_ptr;
 
-    update_metrics(temp_node_ptr, ctx);
+    update_metrics(temp_node_ptr);
 
     // Walk up the parent chain to find the proper hierarchical parent
     const clang::DeclContext *parent_context = decl->getDeclContext();
@@ -63,8 +63,7 @@ ASTNode *ASTAnalysis::get_or_create_node(const clang::Decl *decl,
     return temp_node_ptr;
 }
 
-void ASTAnalysis::update_metrics(const ASTNode *node,
-                                 const clang::ASTContext &context)
+void ASTAnalysis::update_metrics(const ASTNode *node)
 {
     const auto *decl = node->clang_decl();
 
@@ -73,7 +72,7 @@ void ASTAnalysis::update_metrics(const ASTNode *node,
     if (const auto *func_decl = dyn_cast<FunctionDecl>(decl)) {
         functions_found++;
 
-        const auto func_metrics = compute_function_metrics(func_decl, context);
+        const auto func_metrics = compute_function_metrics(func_decl);
         max_complexity =
             std::max(max_complexity, func_metrics.cyclomatic_complexity);
         min_complexity =
@@ -117,8 +116,7 @@ size_t count_decision_points(const clang::Stmt *stmt)
     return count;
 }
 
-FunctionMetrics compute_function_metrics(const clang::FunctionDecl *func_decl,
-                                         const clang::ASTContext &ctx)
+FunctionMetrics compute_function_metrics(const clang::FunctionDecl *func_decl)
 {
     FunctionMetrics metrics;
 
@@ -145,7 +143,7 @@ FunctionMetrics compute_function_metrics(const clang::FunctionDecl *func_decl,
 }
 
 ClassMetrics compute_class_metrics(const clang::CXXRecordDecl *class_decl,
-                                   clang::ASTContext &ctx)
+                                   const clang::ASTContext &ctx)
 {
     ClassMetrics metrics;
 
@@ -173,19 +171,18 @@ ClassMetrics compute_class_metrics(const clang::CXXRecordDecl *class_decl,
 // TODO refactor so unit is not needed and complexity metrics don't have to
 // be recomputed each time
 std::function<ImU32(const ASTNode &)>
-create_complexity_coloring_strategy(const ASTAnalysis &analysis_result,
-                                    clang::ASTUnit *unit)
+create_complexity_coloring_strategy(const ASTAnalysis &analysis_result)
 {
-    return [&analysis_result, unit](const ASTNode &node) -> ImU32 {
+    return [&analysis_result](const ASTNode &node) -> ImU32 {
         float complexity = 1.0f;
 
         // Compute complexity on-demand using direct casting
         if (node.clang_decl()) {
             const clang::Decl *decl = node.clang_decl();
-            clang::ASTContext &ctx = unit->getASTContext();
+            const clang::ASTContext &ctx = *(node.ast_context());
             if (const auto *func_decl =
                     clang::dyn_cast<clang::FunctionDecl>(decl)) {
-                auto metrics = compute_function_metrics(func_decl, ctx);
+                auto metrics = compute_function_metrics(func_decl);
                 complexity = static_cast<float>(metrics.cyclomatic_complexity);
             }
         }

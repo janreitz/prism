@@ -491,9 +491,9 @@ std::string format_template_parameters(
 }
 
 void render_function_details(const clang::FunctionDecl *func_decl,
-                             clang::ASTContext &ctx)
+                             const clang::ASTContext &ctx)
 {
-    auto metrics = compute_function_metrics(func_decl, ctx);
+    auto metrics = compute_function_metrics(func_decl);
     ImGui::Text("Function Metrics:");
     ImGui::Text("  Statement Count: %zu", metrics.statement_count);
     ImGui::Text("  Parameter Count: %zu", metrics.parameter_count);
@@ -560,7 +560,7 @@ void ASTMatcherView::render_selection_details()
 
     // Detailed metrics computed on-demand using direct casting
     const clang::Decl *decl = selected_node_->clang_decl();
-    clang::ASTContext &ctx = ast_units_.front()->getASTContext();
+    const clang::ASTContext &ctx = *(selected_node_->ast_context());
 
     if (const auto *func_decl = clang::dyn_cast<clang::FunctionDecl>(decl)) {
         render_function_details(func_decl, ctx);
@@ -587,8 +587,8 @@ void ASTMatcherView::update_coloring_strategy()
         treemap_->set_coloring_strategy(create_type_based_coloring_strategy());
         break;
     case ColoringMode::Complexity:
-        treemap_->set_coloring_strategy(create_complexity_coloring_strategy(
-            analysis_result_.value(), ast_units_.front().get()));
+        treemap_->set_coloring_strategy(
+            create_complexity_coloring_strategy(analysis_result_.value()));
         break;
     }
 }

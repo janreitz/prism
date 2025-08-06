@@ -28,7 +28,7 @@ class ASTAnalysis
 {
   public:
     ASTAnalysis();
-    void add_decl(const clang::Decl *decl, const clang::ASTContext &ctx);
+    void add_decl(const clang::Decl *decl, const clang::ASTContext *ctx);
 
     bool has_errors() const { return !errors.empty(); }
     double success_rate() const
@@ -57,8 +57,8 @@ class ASTAnalysis
 
   private:
     ASTNode *get_or_create_node(const clang::Decl *decl,
-                                const clang::ASTContext &ctx);
-    void update_metrics(const ASTNode *node, const clang::ASTContext &context);
+                                const clang::ASTContext *ctx);
+    void update_metrics(const ASTNode *node);
 
     // Track seen nodes to avoid duplicates
     std::unordered_map<std::string, ASTNode *> qualified_name_to_nodes_;
@@ -83,8 +83,7 @@ struct NamespaceMetrics {
 };
 
 // Pure metric computation functions
-FunctionMetrics compute_function_metrics(const clang::FunctionDecl *func_decl,
-                                         const clang::ASTContext &ctx);
+FunctionMetrics compute_function_metrics(const clang::FunctionDecl *func_decl);
 
 ClassMetrics compute_class_metrics(const clang::CXXRecordDecl *class_decl,
                                    const clang::ASTContext &ctx);
@@ -94,7 +93,6 @@ size_t count_statements(const clang::Stmt *stmt);
 size_t count_decision_points(const clang::Stmt *stmt);
 
 std::function<ImU32(const ASTNode &)>
-create_complexity_coloring_strategy(const ASTAnalysis &analysis_result,
-                                    clang::ASTUnit *unit);
+create_complexity_coloring_strategy(const ASTAnalysis &analysis_result);
 
 std::function<ImU32(const ASTNode &)> create_type_based_coloring_strategy();
