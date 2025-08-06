@@ -170,15 +170,6 @@ ClassMetrics compute_class_metrics(const clang::CXXRecordDecl *class_decl,
     return metrics;
 }
 
-NamespaceMetrics compute_namespace_metrics(const clang::Decl *decl,
-                                           clang::ASTContext &ctx,
-                                           size_t child_count)
-{
-    NamespaceMetrics metrics;
-    metrics.child_count = child_count;
-    return metrics;
-}
-
 // TODO refactor so unit is not needed and complexity metrics don't have to
 // be recomputed each time
 std::function<ImU32(const ASTNode &)>

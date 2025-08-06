@@ -575,11 +575,6 @@ void ASTMatcherView::render_selection_details()
         ImGui::Text("  Methods: %zu", metrics.method_count);
         ImGui::Text("  Public Members: %zu", metrics.public_member_count);
         ImGui::Text("  Private Members: %zu", metrics.private_member_count);
-    } else if (clang::isa<clang::NamespaceDecl>(decl)) {
-        auto metrics = compute_namespace_metrics(
-            decl, ctx, selected_node_->children().size());
-        ImGui::Text("Namespace Metrics:");
-        ImGui::Text("  Child Count: %zu", metrics.child_count);
     } else {
         ImGui::Text("Type not implemented");
     }

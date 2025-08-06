@@ -87,11 +87,7 @@ FunctionMetrics compute_function_metrics(const clang::FunctionDecl *func_decl,
                                          const clang::ASTContext &ctx);
 
 ClassMetrics compute_class_metrics(const clang::CXXRecordDecl *class_decl,
-                                   clang::ASTContext &ctx);
-
-NamespaceMetrics compute_namespace_metrics(const clang::Decl *decl,
-                                           clang::ASTContext &ctx,
-                                           size_t child_count);
+                                   const clang::ASTContext &ctx);
 
 // Utility functions for complexity analysis
 size_t count_statements(const clang::Stmt *stmt);
