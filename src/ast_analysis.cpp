@@ -10,7 +10,7 @@
 
 using namespace clang;
 
-ASTAnalysisResult::ASTAnalysisResult(ASTContext &ctx)
+ASTAnalysis::ASTAnalysis(ASTContext &ctx)
     : root(std::make_unique<ASTNode>(ctx.getTranslationUnitDecl(), &ctx))
 {
     // Associate TranslationUnit with filename since it is not a NamedDecl
@@ -33,8 +33,14 @@ ASTAnalysisResult::ASTAnalysisResult(ASTContext &ctx)
     qualified_name_to_nodes_.insert({filename, root.get()});
 }
 
-ASTNode *ASTAnalysisResult::get_or_create_node(const clang::Decl *decl,
-                                               const clang::ASTContext &ctx)
+void ASTAnalysis::add_decl(const clang::Decl *decl,
+                           const clang::ASTContext &ctx)
+{
+    get_or_create_node(decl, ctx);
+}
+
+ASTNode *ASTAnalysis::get_or_create_node(const clang::Decl *decl,
+                                         const clang::ASTContext &ctx)
 {
     if (decl == root->clang_decl()) {
         return root.get();
@@ -68,8 +74,8 @@ ASTNode *ASTAnalysisResult::get_or_create_node(const clang::Decl *decl,
     return temp_node_ptr;
 }
 
-void ASTAnalysisResult::update_metrics(const ASTNode *node,
-                                       const clang::ASTContext &context)
+void ASTAnalysis::update_metrics(const ASTNode *node,
+                                 const clang::ASTContext &context)
 {
     const auto *decl = node->clang_decl();
 
@@ -187,7 +193,7 @@ NamespaceMetrics compute_namespace_metrics(const clang::Decl *decl,
 // TODO refactor so unit is not needed and complexity metrics don't have to be
 // recomputed each time
 std::function<ImU32(const ASTNode &)>
-create_complexity_coloring_strategy(const ASTAnalysisResult &analysis_result,
+create_complexity_coloring_strategy(const ASTAnalysis &analysis_result,
                                     clang::ASTUnit *unit)
 {
     return [&analysis_result, unit](const ASTNode &node) -> ImU32 {

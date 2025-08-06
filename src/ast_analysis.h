@@ -4,9 +4,8 @@
 
 #include <clang/AST/ASTContext.h>
 
-#include <algorithm>
 #include <cstddef>
-#include <variant>
+#include <limits>
 
 // Forward declarations for Clang AST types
 namespace clang
@@ -25,13 +24,22 @@ class CXXMethodDecl;
 class FieldDecl;
 } // namespace clang
 
-struct ASTAnalysisResult {
-    ASTAnalysisResult(clang::ASTContext &ctx);
+class ASTAnalysis
+{
+  public:
+    ASTAnalysis(clang::ASTContext &ctx);
+    void add_decl(const clang::Decl *decl, const clang::ASTContext &ctx);
+
+    bool has_errors() const { return !errors.empty(); }
+    double success_rate() const
+    {
+        return nodes_processed > 0
+                   ? (double)(nodes_processed - errors.size()) / nodes_processed
+                   : 1.0;
+    }
+
     std::unique_ptr<ASTNode> root;
     std::vector<ASTAnalysisError> errors;
-
-    // Track seen nodes to avoid duplicates
-    std::unordered_map<std::string, ASTNode *> qualified_name_to_nodes_;
 
     size_t nodes_processed = 0;
     size_t functions_found = 0;
@@ -47,17 +55,13 @@ struct ASTAnalysisResult {
     size_t max_size = 0;
     size_t total_size = 0;
 
+  private:
     ASTNode *get_or_create_node(const clang::Decl *decl,
                                 const clang::ASTContext &ctx);
     void update_metrics(const ASTNode *node, const clang::ASTContext &context);
 
-    bool has_errors() const { return !errors.empty(); }
-    double success_rate() const
-    {
-        return nodes_processed > 0
-                   ? (double)(nodes_processed - errors.size()) / nodes_processed
-                   : 1.0;
-    }
+    // Track seen nodes to avoid duplicates
+    std::unordered_map<std::string, ASTNode *> qualified_name_to_nodes_;
 };
 
 // Metric structures (unchanged from ast_node.h)
@@ -78,7 +82,7 @@ struct NamespaceMetrics {
     size_t child_count = 0;
 };
 
-// Pure metric computation functions - no variant needed
+// Pure metric computation functions
 FunctionMetrics compute_function_metrics(const clang::FunctionDecl *func_decl,
                                          const clang::ASTContext &ctx);
 
@@ -94,7 +98,7 @@ size_t count_statements(const clang::Stmt *stmt);
 size_t count_decision_points(const clang::Stmt *stmt);
 
 std::function<ImU32(const ASTNode &)>
-create_complexity_coloring_strategy(const ASTAnalysisResult &analysis_result,
+create_complexity_coloring_strategy(const ASTAnalysis &analysis_result,
                                     clang::ASTUnit *unit);
 
 std::function<ImU32(const ASTNode &)> create_type_based_coloring_strategy();

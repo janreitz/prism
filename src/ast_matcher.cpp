@@ -17,7 +17,7 @@
 using namespace clang;
 using namespace clang::ast_matchers;
 
-ASTMatcherCallback::ASTMatcherCallback(ASTAnalysisResult &result)
+ASTMatcherCallback::ASTMatcherCallback(ASTAnalysis &result)
     : analysis_result_(result)
 {
 }
@@ -26,16 +26,16 @@ void ASTMatcherCallback::run(const MatchFinder::MatchResult &Result)
 {
     if (const auto *func_decl =
             Result.Nodes.getNodeAs<FunctionDecl>("function")) {
-        analysis_result_.get_or_create_node(func_decl, *Result.Context);
+        analysis_result_.add_decl(func_decl, *Result.Context);
     }
 }
 
-ASTAnalysisResult
+ASTAnalysis
 analyze_with_matcher(clang::ASTContext &ctx,
                      const clang::ast_matchers::DeclarationMatcher &matcher,
                      const std::string &filename)
 {
-    ASTAnalysisResult result(ctx);
+    ASTAnalysis result(ctx);
 
     try {
         clang::ast_matchers::MatchFinder finder;

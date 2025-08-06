@@ -41,21 +41,21 @@ class ASTMatcherCallback
     : public clang::ast_matchers::MatchFinder::MatchCallback
 {
   public:
-    explicit ASTMatcherCallback(ASTAnalysisResult &result);
+    explicit ASTMatcherCallback(ASTAnalysis &result);
 
     // Called on every match by the MatchFinder.
     void
     run(const clang::ast_matchers::MatchFinder::MatchResult &Result) override;
 
   private:
-    ASTAnalysisResult &analysis_result_;
+    ASTAnalysis &analysis_result_;
 
     ASTNode *find_or_create_parent(const clang::Decl *decl,
                                    clang::ASTContext *context);
 };
 
 // Main ASTMatcher analysis function
-ASTAnalysisResult
+ASTAnalysis
 analyze_with_matcher(clang::ASTContext &ctx,
                      const clang::ast_matchers::DeclarationMatcher &matcher,
                      const std::string &filename = "source.cpp");
