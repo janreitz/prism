@@ -235,21 +235,33 @@ std::function<ImU32(const ASTNode &)> create_type_based_coloring_strategy()
             return IM_COL32(128, 128, 128, 255); // Gray
         }
 
-        if (func_decl->isTemplated()) {
-            // Primary template
+        const auto templated_kind = func_decl->getTemplatedKind();
+        // Not templated.
+        if (templated_kind ==
+            clang::FunctionDecl::TemplatedKind::TK_NonTemplate)
+            return IM_COL32(150, 255, 100, 255); // Green
+        // The pattern in a function template declaration.
+        if (templated_kind ==
+            clang::FunctionDecl::TemplatedKind::TK_FunctionTemplate)
             return IM_COL32(255, 150, 100, 255); // Orange
-        }
+        // A non-template function that is an instantiation or explicit
+        // specialization of a member of a templated class.
+        if (templated_kind ==
+            clang::FunctionDecl::TemplatedKind::TK_MemberSpecialization)
+            return IM_COL32(100, 150, 255, 255); // Blue
+        // An instantiation or explicit specialization of a function
+        // template.
+        // Note: this might have been instantiated from a templated class if it
+        // is a class-scope explicit specialization.
+        if (templated_kind == clang::FunctionDecl::TemplatedKind::
+                                  TK_FunctionTemplateSpecialization)
+            return IM_COL32(200, 100, 255, 255); // purple
+        // A function template specialization that hasn't yet been resolved
+        // to a particular specialized function template.
+        if (templated_kind == clang::FunctionDecl::TemplatedKind::
+                                  TK_DependentFunctionTemplateSpecialization)
+            return IM_COL32(200, 100, 255, 255); // purple
 
-        if (func_decl->isFunctionTemplateSpecialization()) {
-            switch (func_decl->getTemplateSpecializationKind()) {
-            case clang::TemplateSpecializationKind::TSK_ImplicitInstantiation:
-                return IM_COL32(100, 150, 255, 255); // Blue
-            case clang::TemplateSpecializationKind::
-                TSK_ExplicitInstantiationDefinition:
-                return IM_COL32(200, 100, 255, 255); // purple
-            }
-        }
-
-        return IM_COL32(150, 255, 100, 255); // Green
+        return IM_COL32(255, 0, 0, 255); // Red
     };
 }
