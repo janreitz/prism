@@ -555,10 +555,7 @@ void ASTMatcherView::render_selection_details()
     ImGui::Text("Name: %s", selected_node_->get_qualified_name().c_str());
     ImGui::Text("Type: %s", selected_node_->type_string().c_str());
     ImGui::Text("Location: %s",
-                format_source_location(
-                    ast_units_.front()->getASTContext().getSourceManager(),
-                    selected_node_->source_location())
-                    .c_str());
+                selected_node_->source_location_string().c_str());
     ImGui::Text("LOCs: %.1ld", selected_node_->locs());
 
     // Detailed metrics computed on-demand using direct casting

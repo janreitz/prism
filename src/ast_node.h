@@ -63,6 +63,7 @@ class ASTNode
     bool is_root() const { return ctx_ == nullptr; };
     std::string type_string() const;
     std::string get_qualified_name() const;
+    std::string source_location_string() const;
 
   private:
     std::vector<std::unique_ptr<ASTNode>> children_;

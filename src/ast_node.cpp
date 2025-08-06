@@ -124,6 +124,11 @@ clang::SourceLocation ASTNode::source_location() const
     return clang_decl_->getLocation();
 }
 
+std::string ASTNode::source_location_string() const
+{
+    return format_source_location(ctx_->getSourceManager(), source_location());
+}
+
 size_t calculate_lines_of_code(const clang::Decl *decl,
                                const clang::SourceManager *sm)
 {
