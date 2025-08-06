@@ -14,11 +14,14 @@
 using namespace clang;
 
 ASTNode::ASTNode(const clang::Decl *decl, const clang::ASTContext *context)
-    : clang_decl_(decl), ctx_(ctx_),
+    : clang_decl_(decl), ctx_(context),
       locs_(context
                 ? calculate_lines_of_code(decl, &context->getSourceManager())
                 : 0)
 {
+    // Explicit root construction requires both ptrs to be null
+    // Normal construction requires both two be non-null
+    assert((context == nullptr) == (decl == nullptr));
 }
 
 void ASTNode::add_child(std::unique_ptr<ASTNode> &&child)
