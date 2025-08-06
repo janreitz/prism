@@ -165,18 +165,3 @@ std::string format_source_location(const clang::SourceManager &sm,
     return inst_filename + ":" + std::to_string(inst_line) + ":" +
            std::to_string(inst_column);
 }
-
-std::unique_ptr<ASTNode> create_node_from_decl(const Decl *decl,
-                                               const ASTContext *context)
-{
-    if (!decl)
-        return nullptr;
-
-    // Create node - everything derived from clang_decl_, LOC computed with real
-    // SourceManager
-    auto node = std::make_unique<ASTNode>(decl, context);
-
-    // Metrics are computed on-demand in the metrics() method
-
-    return node;
-}

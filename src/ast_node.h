@@ -76,10 +76,6 @@ class ASTNode
     size_t locs_;
 };
 
-std::unique_ptr<ASTNode>
-create_node_from_decl(const clang::Decl *decl,
-                      const clang::ASTContext *context);
-
 size_t calculate_lines_of_code(const clang::Decl *decl,
                                const clang::SourceManager *sm);
 
