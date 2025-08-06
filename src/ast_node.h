@@ -59,6 +59,7 @@ class ASTNode
     std::string template_instantiation_info() const;
 
     // Utility functions
+    bool is_root() const { return ctx_ == nullptr; };
     std::string type_string() const;
     std::string get_qualified_name() const;
 
