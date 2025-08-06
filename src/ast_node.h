@@ -51,6 +51,7 @@ class ASTNode
     std::string name() const;
     ASTNodeType node_type() const;
     const clang::Decl *clang_decl() const { return clang_decl_; }
+    const clang::ASTContext *ast_context() const { return ctx_; }
 
     // Source location (to be processed by view layer with SourceManager)
     clang::SourceLocation source_location() const;
