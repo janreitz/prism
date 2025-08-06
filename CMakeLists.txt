@@ -115,7 +115,7 @@ add_executable(prism
     src/filesystem_view.cpp
     src/ast_node.cpp
     src/ast_generation.cpp
-    src/ast_metrics.cpp
+    src/ast_analysis.cpp
     src/ast_matcher.cpp
     src/ast_matcher_view.cpp
     ${IMGUI_SOURCES} 

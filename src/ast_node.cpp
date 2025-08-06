@@ -1,5 +1,5 @@
 #include "ast_node.h"
-#include "ast_metrics.h"
+#include "ast_analysis.h"
 
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/Decl.h"

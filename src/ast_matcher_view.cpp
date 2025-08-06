@@ -1,6 +1,6 @@
 #include "ast_matcher_view.h"
+#include "ast_analysis.h"
 #include "ast_generation.h"
-#include "ast_metrics.h"
 #include "clang/AST/TemplateBase.h"
 #include "clang/Basic/SourceLocation.h"
 #include "clang/Basic/SourceManager.h"
