@@ -27,11 +27,13 @@ struct ProjectParseResult {
     std::unique_ptr<clang::tooling::CompilationDatabase> compilation_db;
 };
 
-using ProgressCallback = std::function<void(
-    size_t current, size_t total, const std::filesystem::path &current_file)>;
+using ProgressCallback = std::function<void(int completed, int total,
+                                            const std::string &current_file)>;
+using ErrorCallback = std::function<void(const std::string &error_message)>;
 
-std::vector<std::unique_ptr<clang::ASTUnit>>
-parse_project_asts(const clang::tooling::CompilationDatabase &compilation_db,
-                   const std::vector<std::string> &source_files);
-
+std::vector<std::unique_ptr<clang::ASTUnit>> parse_project_asts(
+    const clang::tooling::CompilationDatabase &compilation_db,
+    const std::vector<std::string> &source_files,
+    std::optional<ProgressCallback> progress_callback = std::nullopt,
+    std::optional<ErrorCallback> error_callback = std::nullopt);
 } // namespace prism::ast_generation

@@ -21,15 +21,23 @@ parse_ast_from_string(const std::string &source_code,
                                                     file_name);
 }
 
-class MyDiagnosticConsumer : public clang::DiagnosticConsumer
+class ProgressConsumer : public clang::DiagnosticConsumer
 {
   public:
-    //   Callback to inform the diagnostic client that processing of a source
-    //   file is beginning.
+    ProgressConsumer(std::optional<ProgressCallback> progress_callback,
+                     std::optional<ErrorCallback> error_callback,
+                     size_t total_file_count)
+        : progress_callback_(progress_callback),
+          error_callback_(error_callback_), total_file_count_(total_file_count)
+    {
+    }
+    //   Callback to inform the diagnostic client that processing of a
+    //   source file is beginning.
     void BeginSourceFile(const clang::LangOptions &LangOpts,
                          const clang::Preprocessor *PP = nullptr) override
     {
-        std::cerr << "Starting to process file number " << file_count_++
+
+        std::cerr << "Starting to process file number " << processed_file_count_
                   << std::endl;
 
         if (PP) {
@@ -39,14 +47,23 @@ class MyDiagnosticConsumer : public clang::DiagnosticConsumer
                 if (auto *Entry = SM.getFileEntryForID(FID)) {
                     std::cerr << "Processing file: " << Entry->getName().data()
                               << std::endl;
+                    current_file_ = Entry->getName();
                 }
             } else {
                 std::cerr << "MainFileID invalid" << std::endl;
+                current_file_ = "unknown";
             }
         } else {
             std::cerr << std::source_location().function_name()
                       << "(no preprocessor)" << std::endl;
+            current_file_ = "unknown";
         }
+        if (progress_callback_.has_value()) {
+            progress_callback_.value()(processed_file_count_, total_file_count_,
+                                       current_file_);
+        }
+
+        processed_file_count_++;
     }
 
     // Callback to inform the diagnostic client that processing of a source
@@ -73,21 +90,28 @@ class MyDiagnosticConsumer : public clang::DiagnosticConsumer
     }
 
   private:
-    size_t file_count_ = 0;
+    size_t processed_file_count_ = 0;
+    size_t total_file_count_ = 0;
     size_t diagnostic_count_ = 0;
+    std::string current_file_;
+    std::optional<ProgressCallback> progress_callback_;
+    std::optional<ErrorCallback> error_callback_;
 };
 
 std::vector<std::unique_ptr<clang::ASTUnit>>
 parse_project_asts(const clang::tooling::CompilationDatabase &compilation_db,
-                   const std::vector<std::string> &source_files)
+                   const std::vector<std::string> &source_files,
+                   std::optional<ProgressCallback> progress_callback,
+                   std::optional<ErrorCallback> error_callback)
 {
     clang::tooling::ClangTool tool(compilation_db, source_files);
 
-    MyDiagnosticConsumer diag_consumer;
+    ProgressConsumer diag_consumer(progress_callback, error_callback,
+                                   source_files.size());
     tool.setDiagnosticConsumer(&diag_consumer);
 
     std::vector<std::unique_ptr<clang::ASTUnit>> ast_units;
-    int result_code = tool.buildASTs(ast_units);
+    const int result_code = tool.buildASTs(ast_units);
 
     std::cerr << std::source_location().function_name() << ": ";
     if (result_code == 0) {
