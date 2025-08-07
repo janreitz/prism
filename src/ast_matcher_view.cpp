@@ -359,7 +359,7 @@ void ASTMatcherView::render_matcher_controls()
 {
     ImGui::Text("AST Matcher Configuration");
     if (ImGui::BeginCombo(
-            "Predefined Matchers",
+            "##Predefined Matchers",
             predefined_matchers[current_matcher_idx_].first.c_str())) {
 
         for (size_t i = 0; i < predefined_matchers.size(); ++i) {
@@ -367,7 +367,6 @@ void ASTMatcherView::render_matcher_controls()
             if (ImGui::Selectable(predefined_matchers[i].first.c_str(),
                                   is_selected)) {
                 current_matcher_idx_ = i;
-                apply_matcher_to_source();
             }
 
             if (is_selected) {
@@ -375,6 +374,20 @@ void ASTMatcherView::render_matcher_controls()
             }
         }
         ImGui::EndCombo();
+    }
+
+    ImGui::SameLine();
+
+    if (ast_units_.empty()) {
+        ImGui::BeginDisabled();
+    }
+
+    if (ImGui::Button("Analyze")) {
+        apply_matcher_to_source();
+    }
+
+    if (ast_units_.empty()) {
+        ImGui::EndDisabled();
     }
 }
 
