@@ -8,6 +8,7 @@
 #include "clang/Frontend/ASTUnit.h"
 #include "clang/Tooling/CompilationDatabase.h"
 
+#include <future>
 #include <imgui.h>
 #include <map>
 #include <memory>
@@ -38,6 +39,8 @@ class ASTMatcherView
 
     // Analysis results
     std::vector<std::unique_ptr<clang::ASTUnit>> ast_units_;
+    std::optional<std::future<std::vector<std::unique_ptr<clang::ASTUnit>>>>
+        maybe_ast_units_future_;
     ASTAnalysis analysis_result_;
     std::unique_ptr<TreeMapWidget<ASTNode>> treemap_;
 
@@ -52,6 +55,7 @@ class ASTMatcherView
     void render_source_input();
     void render_string_input();
     void render_project_input();
+    void poll_async_ast_parsing();
     void render_matcher_controls();
     bool apply_matcher_to_source();
     void render_treemap();

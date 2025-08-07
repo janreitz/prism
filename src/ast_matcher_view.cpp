@@ -10,6 +10,7 @@
 #include "llvm/Support/raw_ostream.h"
 
 #include <array>
+#include <chrono>
 #include <cstring>
 #include <expected>
 #include <filesystem>
@@ -184,6 +185,9 @@ void ASTMatcherView::render_source_input()
         ImGui::TextColored(ImVec4(0, 1, 0, 1), "Parsed %zu translation units",
                            ast_units_.size());
     }
+
+    // Always poll
+    poll_async_ast_parsing();
 }
 
 void ASTMatcherView::render_string_input()
@@ -347,11 +351,29 @@ void ASTMatcherView::render_project_input()
 
     if (ImGui::Button("Parse ASTs")) {
         selected_node_ = nullptr;
-        ast_units_ = prism::ast_generation::parse_project_asts(*compilation_db_,
-                                                               source_files_);
+        maybe_ast_units_future_ = std::async(std::launch::async, [this]() {
+            return prism::ast_generation::parse_project_asts(*compilation_db_,
+                                                             source_files_);
+            // TODO pass callbacks
+        });
     }
+
+    // TODO progress display
+
     if (!ast_parsing_possible) {
         ImGui::EndDisabled();
+    }
+}
+
+void ASTMatcherView::poll_async_ast_parsing()
+{
+    // Check if parsing completed
+    if (maybe_ast_units_future_ &&
+        maybe_ast_units_future_.value().wait_for(std::chrono::seconds(0)) ==
+            std::future_status::ready) {
+
+        ast_units_ = maybe_ast_units_future_.value().get();
+        maybe_ast_units_future_ = std::nullopt;
     }
 }
 
