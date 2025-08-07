@@ -1,21 +1,26 @@
 #include "ast_matcher_view.h"
 #include "ast_analysis.h"
 #include "ast_generation.h"
+#include "utils.h"
+
 #include "clang/AST/TemplateBase.h"
 #include "clang/Basic/SourceLocation.h"
 #include "clang/Basic/SourceManager.h"
 #include "clang/Tooling/CompilationDatabase.h"
 #include "llvm/Support/raw_ostream.h"
+
+#include <array>
 #include <cstring>
 #include <expected>
+#include <filesystem>
 #include <iostream>
 #include <regex>
 
 ASTMatcherView::ASTMatcherView()
-{
-    // Initialize with example source code that demonstrates structural
-    // hierarchy
-    source_code_ = R"(
+    : source_code_(R"(
+
+// Example Code
+
 #include <iostream>
 #include <vector>
 #include <memory>
@@ -128,11 +133,8 @@ int main() {
     
     return 0;
 }
-)";
-
-    std::strncpy(source_buffer_, source_code_.c_str(),
-                 sizeof(source_buffer_) - 1);
-    source_buffer_[sizeof(source_buffer_) - 1] = '\0';
+)")
+{
 }
 
 bool ASTMatcherView::render()
@@ -166,17 +168,16 @@ void ASTMatcherView::render_source_input()
 {
     ImGui::Text("AST Source Selection");
 
-    // Mode selection
     static int input_mode = 0; // 0 = string, 1 = project
-    ImGui::RadioButton("Source Code", &input_mode, 0);
+    ImGui::RadioButton("String", &input_mode, 0);
     ImGui::SameLine();
-    ImGui::RadioButton("Project Directory", &input_mode, 1);
+    ImGui::RadioButton("Compile Commands", &input_mode, 1);
 
     ImGui::Separator();
 
     if (input_mode == 0) {
         render_string_input();
-    } else {
+    } else if (input_mode == 1) {
         render_project_input();
     }
     if (!ast_units_.empty()) {
@@ -187,29 +188,45 @@ void ASTMatcherView::render_source_input()
 
 void ASTMatcherView::render_string_input()
 {
-    ImGui::Text("Source Code Input");
-
     static char filename_buffer[256];
-    std::strncpy(filename_buffer, filename_.c_str(),
-                 sizeof(filename_buffer) - 1);
-    filename_buffer[sizeof(filename_buffer) - 1] = '\0';
+    ImGui::InputTextWithHint("##source_file_path", "Enter source file path",
+                             filename_buffer, sizeof(filename_buffer));
 
-    if (ImGui::InputText("Filename", filename_buffer,
-                         sizeof(filename_buffer))) {
-        filename_ = std::string(filename_buffer);
+    std::filesystem::path path(filename_buffer);
+    const bool file_is_valid =
+        std::filesystem::exists(path) && std::filesystem::is_regular_file(path);
+    if (!file_is_valid) {
+        ImGui::BeginDisabled();
     }
 
-    if (ImGui::InputTextMultiline("##source", source_buffer_,
-                                  sizeof(source_buffer_), ImVec2(-1, 100))) {
-        source_code_ = std::string(source_buffer_);
+    ImGui::SameLine();
+    if (ImGui::Button("Update code from file")) {
+        const auto maybe_content = utils::read_file(path);
+
+        if (!maybe_content) {
+            ImGui::TextColored(ImVec4(0, 1, 0, 1), "%s",
+                               maybe_content.error().c_str());
+        } else {
+            source_code_ = maybe_content.value();
+        }
+    }
+
+    if (!file_is_valid) {
+        ImGui::EndDisabled();
+    }
+
+    // TODO this is a problem if the user pastes code
+    source_code_.reserve(source_code_.size() + 128);
+    ImGui::Text("Source Code");
+    if (ImGui::InputTextMultiline("##source", source_code_.data(),
+                                  source_code_.capacity(), ImVec2(-1, 100))) {
     }
 
     if (ImGui::Button("Parse AST")) {
-        source_code_ = std::string(source_buffer_);
         error_message_.clear();
         selected_node_ = nullptr;
         auto new_ast_unit = prism::ast_generation::parse_ast_from_string(
-            source_code_, args_, filename_);
+            source_code_, args_, "source.cpp");
         if (new_ast_unit) {
             ast_units_.clear();
             ast_units_.push_back(std::move(new_ast_unit));
@@ -224,7 +241,6 @@ void ASTMatcherView::render_project_input()
                      sizeof(project_root_buffer));
 
     std::filesystem::path project_root(project_root_buffer);
-    // Only enable button if we have a valid directory
     bool project_root_is_valid = std::filesystem::exists(project_root) &&
                                  std::filesystem::is_directory(project_root);
 

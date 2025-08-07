@@ -28,7 +28,6 @@ class ASTMatcherView
     std::string source_code_;
     std::vector<std::string> args_ = {"-std=c++17"};
     std::string filename_ = "source.cpp";
-    char source_buffer_[4096];
     // Project input
     std::unique_ptr<clang::tooling::CompilationDatabase> compilation_db_;
     std::vector<std::string> source_files_;
