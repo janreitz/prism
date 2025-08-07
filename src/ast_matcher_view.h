@@ -33,14 +33,23 @@ class ASTMatcherView
     std::unique_ptr<clang::tooling::CompilationDatabase> compilation_db_;
     std::vector<std::string> source_files_;
 
+    std::vector<std::unique_ptr<clang::ASTUnit>> ast_units_;
+    std::optional<std::future<std::vector<std::unique_ptr<clang::ASTUnit>>>>
+        maybe_ast_units_future_;
+
+    struct ParseProgress {
+        size_t total_file_count = 0;
+        size_t processed_file_count = 0;
+        std::string current_file;
+        std::mutex mut;
+    } parse_progress_;
+
     // Matcher input
     size_t current_matcher_idx_ = 0;
     std::string error_message_;
 
     // Analysis results
-    std::vector<std::unique_ptr<clang::ASTUnit>> ast_units_;
-    std::optional<std::future<std::vector<std::unique_ptr<clang::ASTUnit>>>>
-        maybe_ast_units_future_;
+
     ASTAnalysis analysis_result_;
     std::unique_ptr<TreeMapWidget<ASTNode>> treemap_;
 
@@ -55,6 +64,7 @@ class ASTMatcherView
     void render_source_input();
     void render_string_input();
     void render_project_input();
+    void render_parse_progress();
     void poll_async_ast_parsing();
     void render_matcher_controls();
     bool apply_matcher_to_source();

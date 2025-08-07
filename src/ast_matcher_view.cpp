@@ -352,17 +352,49 @@ void ASTMatcherView::render_project_input()
     if (ImGui::Button("Parse ASTs")) {
         selected_node_ = nullptr;
         maybe_ast_units_future_ = std::async(std::launch::async, [this]() {
-            return prism::ast_generation::parse_project_asts(*compilation_db_,
-                                                             source_files_);
-            // TODO pass callbacks
+            return prism::ast_generation::parse_project_asts(
+                *compilation_db_, source_files_,
+                [this](int completed, int total,
+                       const std::string &current_file) {
+                    std::lock_guard<std::mutex> lck(parse_progress_.mut);
+                    parse_progress_.processed_file_count = completed;
+                    parse_progress_.total_file_count = total;
+                    parse_progress_.current_file = current_file;
+                });
+            // TODO pass error callback
         });
     }
 
-    // TODO progress display
+    render_parse_progress();
 
     if (!ast_parsing_possible) {
         ImGui::EndDisabled();
     }
+}
+
+void ASTMatcherView::render_parse_progress()
+{
+    std::lock_guard<std::mutex> lck(parse_progress_.mut);
+
+    // Don't show progress bar if parsing hasn't started
+    if (parse_progress_.total_file_count == 0)
+        return;
+
+    float progress_ratio =
+        parse_progress_.total_file_count > 0
+            ? static_cast<float>(parse_progress_.processed_file_count) /
+                  parse_progress_.total_file_count
+            : 0.0f;
+
+    std::string progress_text =
+        std::string("Parsing ") + parse_progress_.current_file + '(' +
+        std::to_string(parse_progress_.processed_file_count) + '/' +
+        std::to_string(parse_progress_.total_file_count) + ')';
+
+    ImGui::PushStyleColor(ImGuiCol_PlotHistogram,
+                          ImVec4(0.0f, 0.8f, 0.2f, 1.0f)); // Green fill
+    ImGui::ProgressBar(progress_ratio, ImVec2(-1, 0), progress_text.c_str());
+    ImGui::PopStyleColor(1);
 }
 
 void ASTMatcherView::poll_async_ast_parsing()
