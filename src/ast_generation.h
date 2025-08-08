@@ -1,11 +1,9 @@
 #include <clang/Frontend/ASTUnit.h>
 #include <clang/Tooling/CompilationDatabase.h>
 
-#include <filesystem>
 #include <functional>
 #include <optional>
 #include <string>
-#include <variant>
 #include <vector>
 
 namespace prism::ast_generation

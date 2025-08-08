@@ -2,27 +2,20 @@
 
 #include "ast_node.h"
 
-#include <clang/AST/ASTContext.h>
-
 #include <cstddef>
 #include <limits>
+#include <unordered_map>
 #include <unordered_set>
 
 // Forward declarations for Clang AST types
 namespace clang
 {
+class ASTContext;
+class ASTUnit;
 class Decl;
 class FunctionDecl;
 class CXXRecordDecl;
-class VarDecl;
 class Stmt;
-class IfStmt;
-class WhileStmt;
-class ForStmt;
-class SwitchStmt;
-class ConditionalOperator;
-class CXXMethodDecl;
-class FieldDecl;
 } // namespace clang
 
 class ASTAnalysis
@@ -96,8 +89,3 @@ ClassMetrics compute_class_metrics(const clang::CXXRecordDecl *class_decl,
 // Utility functions for complexity analysis
 size_t count_statements(const clang::Stmt *stmt);
 size_t count_decision_points(const clang::Stmt *stmt);
-
-std::function<ImU32(const ASTNode &)>
-create_complexity_coloring_strategy(const ASTAnalysis &analysis_result);
-
-std::function<ImU32(const ASTNode &)> create_type_based_coloring_strategy();

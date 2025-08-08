@@ -1,20 +1,19 @@
 #pragma once
 
-#include "ast_matcher.h"
-#include "ast_node.h"
+#include "ast_analysis.h"
 #include "treemap_widget.h"
 
-#include "clang/ASTMatchers/ASTMatchers.h"
 #include "clang/Frontend/ASTUnit.h"
 #include "clang/Tooling/CompilationDatabase.h"
 
 #include <future>
-#include <imgui.h>
 #include <map>
 #include <memory>
 #include <optional>
 #include <string>
 #include <vector>
+
+class ASTNode;
 
 class ASTMatcherView
 {
@@ -75,3 +74,9 @@ class ASTMatcherView
     void update_coloring_strategy();
     void register_treemap_callbacks();
 };
+
+
+std::function<ImU32(const ASTNode &)>
+create_complexity_coloring_strategy(const ASTAnalysis &analysis_result);
+
+std::function<ImU32(const ASTNode &)> create_type_based_coloring_strategy();

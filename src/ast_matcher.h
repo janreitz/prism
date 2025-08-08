@@ -1,16 +1,16 @@
 #pragma once
 
-#include "ast_analysis.h"
-#include "ast_node.h"
+
 #include "clang/ASTMatchers/ASTMatchFinder.h"
 #include "clang/ASTMatchers/ASTMatchers.h"
-#include "clang/Frontend/FrontendActions.h"
 #include "clang/Tooling/Tooling.h"
 #include <memory>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+
+class ASTAnalysis;
 
 const std::vector<
     std::pair<std::string, clang::ast_matchers::DeclarationMatcher>>
@@ -49,9 +49,6 @@ class ASTMatcherCallback
 
   private:
     ASTAnalysis &analysis_result_;
-
-    ASTNode *find_or_create_parent(const clang::Decl *decl,
-                                   clang::ASTContext *context);
 };
 
 // Main ASTMatcher analysis function

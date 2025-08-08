@@ -1,5 +1,7 @@
 #include "ast_matcher_view.h"
-#include "ast_analysis.h"
+
+#include "ast_matcher.h"
+#include "ast_node.h"
 #include "ast_generation.h"
 #include "utils.h"
 
@@ -10,7 +12,6 @@
 #include "llvm/Support/raw_ostream.h"
 
 #include <array>
-#include <chrono>
 #include <cstring>
 #include <expected>
 #include <filesystem>
@@ -691,4 +692,80 @@ void ASTMatcherView::register_treemap_callbacks()
         std::cout << "Selected AST node: " << node.get_qualified_name() << " ("
                   << node.type_string() << ")" << std::endl;
     });
+}
+
+
+// TODO refactor so unit is not needed and complexity metrics don't have to
+// be recomputed each time
+std::function<ImU32(const ASTNode &)>
+create_complexity_coloring_strategy(const ASTAnalysis &analysis_result)
+{
+    return [&analysis_result](const ASTNode &node) -> ImU32 {
+        float complexity = 1.0f;
+
+        // Compute complexity on-demand using direct casting
+        if (node.clang_decl()) {
+            const clang::Decl *decl = node.clang_decl();
+            const clang::ASTContext &ctx = *(node.ast_context());
+            if (const auto *func_decl =
+                    clang::dyn_cast<clang::FunctionDecl>(decl)) {
+                auto metrics = compute_function_metrics(func_decl);
+                complexity = static_cast<float>(metrics.cyclomatic_complexity);
+            }
+        }
+
+        float max_complexity =
+            static_cast<float>(analysis_result.max_complexity);
+
+        if (max_complexity == 0)
+            return IM_COL32(128, 128, 128, 255);
+
+        float ratio = complexity / max_complexity;
+
+        // Green to red gradient based on complexity
+        int red = static_cast<int>(255 * ratio);
+        int green = static_cast<int>(255 * (1.0f - ratio));
+        return IM_COL32(red, green, 0, 255);
+    };
+}
+
+std::function<ImU32(const ASTNode &)> create_type_based_coloring_strategy()
+{
+    return [](const ASTNode &node) -> ImU32 {
+        const auto *func_decl =
+            clang::dyn_cast<clang::FunctionDecl>(node.clang_decl());
+
+        if (!func_decl) {
+            return IM_COL32(128, 128, 128, 255); // Gray
+        }
+
+        const auto templated_kind = func_decl->getTemplatedKind();
+        // Not templated.
+        if (templated_kind ==
+            clang::FunctionDecl::TemplatedKind::TK_NonTemplate)
+            return IM_COL32(150, 255, 100, 255); // Green
+        // The pattern in a function template declaration.
+        if (templated_kind ==
+            clang::FunctionDecl::TemplatedKind::TK_FunctionTemplate)
+            return IM_COL32(255, 150, 100, 255); // Orange
+        // A non-template function that is an instantiation or explicit
+        // specialization of a member of a templated class.
+        if (templated_kind ==
+            clang::FunctionDecl::TemplatedKind::TK_MemberSpecialization)
+            return IM_COL32(100, 150, 255, 255); // Blue
+        // An instantiation or explicit specialization of a function
+        // template.
+        // Note: this might have been instantiated from a templated class if
+        // it is a class-scope explicit specialization.
+        if (templated_kind == clang::FunctionDecl::TemplatedKind::
+                                  TK_FunctionTemplateSpecialization)
+            return IM_COL32(200, 100, 255, 255); // purple
+        // A function template specialization that hasn't yet been resolved
+        // to a particular specialized function template.
+        if (templated_kind == clang::FunctionDecl::TemplatedKind::
+                                  TK_DependentFunctionTemplateSpecialization)
+            return IM_COL32(200, 100, 255, 255); // purple
+
+        return IM_COL32(255, 0, 0, 255); // Red
+    };
 }

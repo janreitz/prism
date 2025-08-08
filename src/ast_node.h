@@ -1,9 +1,5 @@
 #pragma once
 
-#include <chrono>
-#include <expected>
-#include <functional>
-#include <imgui.h>
 #include <memory>
 #include <string>
 #include <vector>
@@ -12,12 +8,7 @@
 namespace clang
 {
 class ASTContext;
-class ASTUnit;
 class Decl;
-class FunctionDecl;
-class CXXRecordDecl;
-class VarDecl;
-class Stmt;
 class SourceLocation;
 class SourceManager;
 } // namespace clang

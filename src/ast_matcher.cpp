@@ -1,18 +1,11 @@
 #include "ast_matcher.h"
-#include "clang/AST/ASTContext.h"
+
+#include "ast_analysis.h"
+
 #include "clang/AST/Decl.h"
-#include "clang/AST/DeclBase.h"
-#include "clang/AST/DeclCXX.h"
-#include "clang/AST/DeclTemplate.h"
-#include "clang/AST/Stmt.h"
 #include "clang/ASTMatchers/ASTMatchFinder.h"
 #include "clang/ASTMatchers/ASTMatchers.h"
-#include "clang/Basic/SourceManager.h"
-#include "clang/Frontend/ASTConsumers.h"
 #include "clang/Frontend/ASTUnit.h"
-#include "clang/Frontend/CompilerInstance.h"
-#include "clang/Frontend/FrontendActions.h"
-#include "clang/Tooling/Tooling.h"
 
 using namespace clang;
 using namespace clang::ast_matchers;
