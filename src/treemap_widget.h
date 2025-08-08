@@ -197,6 +197,14 @@ void TreeMapWidget<T>::render(const char *label, const ImVec2 &size,
             ImGui::ResetMouseDragDelta(ImGuiMouseButton_Middle);
         }
 
+        // // Constrain pan
+        const float max_pan_x = current_canvas_size.x - current_canvas_size.x/zoom_;
+        const float max_pan_y = current_canvas_size.y - current_canvas_size.y/zoom_;
+        pan_ = TreemapCoordinate{
+            .x = std::clamp(pan_.x, 0.0F, max_pan_x),
+            .y = std::clamp(pan_.y, 0.0F, max_pan_y),
+        };
+
         const auto *currently_hovered_node = treemap::hit_test(
             map_mouse_pos.to_imvec2(), layout_.leaves, ImVec2(0, 0));
 
