@@ -87,8 +87,8 @@ template <treemap::TreeNode T> class TreeMapWidget
     TreemapCoordinate pan_{.x = 0.0f, .y = 0.0f};
     float zoom_{1.0f};
     WindowCoordinate last_mouse_pos_{0.0f, 0.0f};
-    static constexpr float MIN_ZOOM = 0.1f;
-    static constexpr float MAX_ZOOM = 10.0f;
+    static constexpr float MIN_ZOOM = 1.0f;
+    static constexpr float MAX_ZOOM = 20.0f;
     static constexpr float ZOOM_SPEED = 0.1f;
 
     treemap::Layout<T> layout_;
