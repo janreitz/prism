@@ -3,6 +3,7 @@
 #include "ast_analysis.h"
 #include "treemap_widget.h"
 
+#include "clang/ASTMatchers/ASTMatchersInternal.h"
 #include "clang/Frontend/ASTUnit.h"
 #include "clang/Tooling/CompilationDatabase.h"
 
@@ -32,6 +33,10 @@ class ASTMatcherView
     std::unique_ptr<clang::tooling::CompilationDatabase> compilation_db_;
     std::vector<std::string> source_files_;
 
+    std::string matcher_expression_ = "functionDecl().bind(\"function\")";
+    std::optional<clang::ast_matchers::internal::DynTypedMatcher>
+        maybe_matcher_;
+    std::optional<std::string> maybe_matcher_parse_error_;
     std::vector<std::unique_ptr<clang::ASTUnit>> ast_units_;
     std::optional<std::future<std::vector<std::unique_ptr<clang::ASTUnit>>>>
         maybe_ast_units_future_;
@@ -66,7 +71,6 @@ class ASTMatcherView
     void render_parse_progress();
     void poll_async_ast_parsing();
     void render_matcher_controls();
-    bool apply_matcher_to_source();
     void render_treemap();
     void render_interactive_info();
     void render_statistics();
@@ -74,7 +78,6 @@ class ASTMatcherView
     void update_coloring_strategy();
     void register_treemap_callbacks();
 };
-
 
 std::function<ImU32(const ASTNode &)>
 create_complexity_coloring_strategy(const ASTAnalysis &analysis_result);

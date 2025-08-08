@@ -1,8 +1,8 @@
 #include "ast_matcher_view.h"
 
+#include "ast_generation.h"
 #include "ast_matcher.h"
 #include "ast_node.h"
-#include "ast_generation.h"
 #include "utils.h"
 
 #include "clang/AST/TemplateBase.h"
@@ -412,79 +412,68 @@ void ASTMatcherView::poll_async_ast_parsing()
 
 void ASTMatcherView::render_matcher_controls()
 {
-    ImGui::Text("AST Matcher Configuration");
-    if (ImGui::BeginCombo(
-            "##Predefined Matchers",
-            predefined_matchers[current_matcher_idx_].first.c_str())) {
-
-        for (size_t i = 0; i < predefined_matchers.size(); ++i) {
-            const bool is_selected = (current_matcher_idx_ == i);
-            if (ImGui::Selectable(predefined_matchers[i].first.c_str(),
-                                  is_selected)) {
-                current_matcher_idx_ = i;
-            }
-
-            if (is_selected) {
-                ImGui::SetItemDefaultFocus();
-            }
-        }
-        ImGui::EndCombo();
-    }
-
-    ImGui::SameLine();
+    ImGui::Text("AST Matcher Expression");
+    matcher_expression_.reserve(matcher_expression_.size() + 512);
+    ImGui::InputText("##matcher_expression_input", matcher_expression_.data(),
+                     matcher_expression_.capacity());
 
     if (ast_units_.empty()) {
-        ImGui::BeginDisabled();
+        ImGui::TextColored(ImVec4(1, 1, 1, 1),
+                           "Need to parse AST before matching!");
     }
 
-    if (ImGui::Button("Analyze")) {
-        apply_matcher_to_source();
-    }
+    utils::ScopedDisable(ast_units_.empty());
 
-    if (ast_units_.empty()) {
-        ImGui::EndDisabled();
-    }
-}
+    const bool analyze_button_pressed = ImGui::Button("Analyze");
 
-bool ASTMatcherView::apply_matcher_to_source()
-{
-    if (ast_units_.empty()) {
-        std::cout << "Need to parse AST before matching!" << std::endl;
-        return false;
-    }
-    error_message_.clear();
-    selected_node_ = nullptr; // Clear selection on new analysis
+    // Parsing
+    if (analyze_button_pressed) {
+        const auto matcher_parse_result =
+            parse_matcher_expression(matcher_expression_);
 
-    try {
-        std::cout << "Applying matcher: " << current_matcher_idx_ << std::endl;
-
-        for (auto &ast_unit : ast_units_) {
-            analyze_with_matcher(
-                analysis_result_, ast_unit,
-                predefined_matchers[current_matcher_idx_].second, filename_);
-        }
-
-        if (analysis_result_.has_data()) {
-            treemap_ = std::make_unique<TreeMapWidget<ASTNode>>(
-                *analysis_result_.root);
-            update_coloring_strategy();
-            register_treemap_callbacks();
-
-            std::cout << "Match analysis completed: "
-                      << analysis_result_.functions_found << " functions, "
-                      << analysis_result_.classes_found << " classes found"
-                      << std::endl;
-            return true;
+        if (!matcher_parse_result.has_value()) {
+            maybe_matcher_parse_error_ = matcher_parse_result.error();
+            maybe_matcher_ = std::nullopt;
         } else {
-            error_message_ =
-                "No matches found for expression: " + current_matcher_idx_;
-            treemap_.reset();
-            return false;
+            maybe_matcher_parse_error_ = std::nullopt;
+            maybe_matcher_ = matcher_parse_result.value();
         }
-    } catch (const std::exception &e) {
-        error_message_ = std::string("Matcher analysis failed: ") + e.what();
-        treemap_.reset();
-        return false;
+    }
+
+    if (maybe_matcher_parse_error_.has_value()) {
+        ImGui::SameLine();
+        ImGui::TextColored(ImVec4(1, 1, 1, 1),
+                           "Error parsing expression '%s': %s",
+                           matcher_expression_.c_str(),
+                           maybe_matcher_parse_error_.value().c_str());
+    }
+
+    if (analyze_button_pressed && maybe_matcher_.has_value()) {
+
+        selected_node_ = nullptr;
+        const auto &matcher = maybe_matcher_.value();
+
+        try {
+            for (auto &ast_unit : ast_units_) {
+                analyze_with_matcher(analysis_result_, ast_unit, matcher,
+                                     filename_);
+            }
+
+            if (analysis_result_.has_data()) {
+                treemap_ = std::make_unique<TreeMapWidget<ASTNode>>(
+                    *analysis_result_.root);
+                update_coloring_strategy();
+                register_treemap_callbacks();
+            } else {
+                error_message_ =
+                    "No matches found for expression: " + current_matcher_idx_;
+                treemap_.reset();
+            }
+        } catch (const std::exception &e) {
+            error_message_ =
+                std::string("Matcher analysis failed: ") + e.what();
+            treemap_.reset();
+        }
     }
 }
 
@@ -693,7 +682,6 @@ void ASTMatcherView::register_treemap_callbacks()
                   << node.type_string() << ")" << std::endl;
     });
 }
-
 
 // TODO refactor so unit is not needed and complexity metrics don't have to
 // be recomputed each time

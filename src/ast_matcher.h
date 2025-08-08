@@ -1,13 +1,15 @@
 #pragma once
 
-
-#include "clang/ASTMatchers/ASTMatchFinder.h"
 #include "clang/ASTMatchers/ASTMatchers.h"
-#include "clang/Tooling/Tooling.h"
+#include "clang/ASTMatchers/ASTMatchersInternal.h"
+#include "clang/Frontend/ASTUnit.h"
+
+#include <expected>
 #include <memory>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <variant>
 #include <vector>
 
 class ASTAnalysis;
@@ -37,22 +39,15 @@ const std::vector<
              .bind("function")},
     };
 
-class ASTMatcherCallback
-    : public clang::ast_matchers::MatchFinder::MatchCallback
-{
-  public:
-    explicit ASTMatcherCallback(ASTAnalysis &result);
-
-    // Called on every match by the MatchFinder.
-    void
-    run(const clang::ast_matchers::MatchFinder::MatchResult &Result) override;
-
-  private:
-    ASTAnalysis &analysis_result_;
-};
+std::expected<clang::ast_matchers::internal::DynTypedMatcher, std::string>
+parse_matcher_expression(const std::string &matcher_expression);
 
 // Main ASTMatcher analysis function
 void analyze_with_matcher(
     ASTAnalysis &result, std::unique_ptr<clang::ASTUnit> &unit,
-    const clang::ast_matchers::DeclarationMatcher &matcher,
+    const std::variant<clang::ast_matchers::DeclarationMatcher,
+                       clang::ast_matchers::internal::DynTypedMatcher
+                       // clang::ast_matchers::StatementMatcher,
+                       // clang::ast_matchers::TypeMatcher,
+                       > &matcher,
     const std::string &filename = "source.cpp");

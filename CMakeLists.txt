@@ -126,6 +126,7 @@ target_link_libraries(prism
         clangAST
         clangBasic
         clangASTMatchers
+        clangDynamicASTMatchers
         clangTooling
 )
 
