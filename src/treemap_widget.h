@@ -16,12 +16,45 @@
 #include <tracy/Tracy.hpp>
 #endif
 
+struct WindowCoordinate {
+    float x = 0.0F;
+    float y = 0.0F;
+    ImVec2 to_imvec2() const;
+    static WindowCoordinate from_imvec2(ImVec2 vec2);
+};
+
+struct CanvasCoordinate {
+    float x = 0.0F;
+    float y = 0.0F;
+    ImVec2 to_imvec2() const;
+    static CanvasCoordinate from_imvec2(ImVec2 vec2);
+};
+
+struct TreemapCoordinate {
+    float x = 0.0F;
+    float y = 0.0F;
+    ImVec2 to_imvec2() const;
+    static TreemapCoordinate from_imvec2(ImVec2 vec2);
+};
+
+WindowCoordinate to_window(CanvasCoordinate canvas_coord,
+                           WindowCoordinate canvas_pos);
+
+CanvasCoordinate to_canvas(WindowCoordinate win_coord,
+                           WindowCoordinate canvas_pos);
+
+CanvasCoordinate to_canvas(TreemapCoordinate map_coord, TreemapCoordinate pan,
+                           float zoom);
+
+TreemapCoordinate to_treemap(CanvasCoordinate canvas_coord,
+                             TreemapCoordinate pan, float zoom);
+
 template <treemap::TreeNode T> class TreeMapWidget
 {
   public:
     explicit TreeMapWidget(const T &root);
 
-    bool render(const char *label, const ImVec2 &size, bool parallelize);
+    void render(const char *label, const ImVec2 &size, bool parallelize);
 
     void reset_view();
 
@@ -49,12 +82,11 @@ template <treemap::TreeNode T> class TreeMapWidget
     const T *selected_node_ = nullptr;
     const T *hovered_node_ = nullptr;
 
-    ImVec2 canvas_size_ = {0.0F, 0.0F};
+    CanvasCoordinate canvas_size_;
     // Pan and zoom state
-    ImVec2 pan_offset_{0.0f, 0.0f};
-    float zoom_level_{1.0f};
-    bool is_panning_{false};
-    ImVec2 last_mouse_pos_{0.0f, 0.0f};
+    TreemapCoordinate pan_{.x = 0.0f, .y = 0.0f};
+    float zoom_{1.0f};
+    WindowCoordinate last_mouse_pos_{0.0f, 0.0f};
     static constexpr float MIN_ZOOM = 0.1f;
     static constexpr float MAX_ZOOM = 10.0f;
     static constexpr float ZOOM_SPEED = 0.1f;
@@ -65,35 +97,6 @@ template <treemap::TreeNode T> class TreeMapWidget
     std::vector<std::pair<const T *, treemap::Rect>>
     position_row(const std::vector<const T *> &row,
                  const treemap::Rect &available_rect);
-
-    ImVec2 world_to_screen(const ImVec2 &world_pos,
-                           const ImVec2 &canvas_pos) const
-    {
-        return ImVec2(
-            canvas_pos.x + (world_pos.x * zoom_level_) + pan_offset_.x,
-            canvas_pos.y + (world_pos.y * zoom_level_) + pan_offset_.y);
-    }
-
-    ImVec2 screen_to_world(const ImVec2 &screen_pos,
-                           const ImVec2 &canvas_pos) const
-    {
-        return ImVec2(
-            (screen_pos.x - canvas_pos.x - pan_offset_.x) / zoom_level_,
-            (screen_pos.y - canvas_pos.y - pan_offset_.y) / zoom_level_);
-    }
-
-    bool is_rect_visible(const treemap::Rect &rect, const ImVec2 &canvas_pos,
-                         const ImVec2 &canvas_size) const
-    {
-        ImVec2 rect_min = world_to_screen(ImVec2(rect.x, rect.y), canvas_pos);
-        ImVec2 rect_max = world_to_screen(
-            ImVec2(rect.x + rect.width, rect.y + rect.height), canvas_pos);
-
-        return !(rect_max.x < canvas_pos.x ||
-                 rect_min.x > canvas_pos.x + canvas_size.x ||
-                 rect_max.y < canvas_pos.y ||
-                 rect_min.y > canvas_pos.y + canvas_size.y);
-    }
 };
 
 // Template implementation
@@ -127,12 +130,12 @@ const T &TreeMapWidget<T>::get_selected_node() const
 
 template <treemap::TreeNode T> void TreeMapWidget<T>::reset_view()
 {
-    pan_offset_ = ImVec2(0.0f, 0.0f);
-    zoom_level_ = 1.0f;
+    pan_ = ImVec2(0.0f, 0.0f);
+    zoom_ = 1.0f;
 }
 
 template <treemap::TreeNode T>
-bool TreeMapWidget<T>::render(const char *label, const ImVec2 &size,
+void TreeMapWidget<T>::render(const char *label, const ImVec2 &size,
                               bool parallelize)
 {
 #if TRACY_ENABLE
@@ -140,15 +143,17 @@ bool TreeMapWidget<T>::render(const char *label, const ImVec2 &size,
 #endif
     ImGui::BeginChild(label, size, ImGuiChildFlags_ResizeY);
 
-    ImVec2 canvas_pos = ImGui::GetCursorScreenPos();
-    ImVec2 current_canvas_size = ImGui::GetContentRegionAvail();
+    const auto canvas_pos =
+        WindowCoordinate::from_imvec2(ImGui::GetCursorScreenPos());
+    const auto current_canvas_size =
+        CanvasCoordinate::from_imvec2(ImGui::GetContentRegionAvail());
 
     if (current_canvas_size.x <= 0.0F || current_canvas_size.y <= 0.0F) {
         std::cerr << "Can't render treemap in canvas of size ("
                   << current_canvas_size.x << " | " << current_canvas_size.y
                   << ")\n";
         ImGui::EndChild();
-        return false;
+        return;
     }
 
     // Only layout if canvas size changed (layout in world coordinates)
@@ -160,55 +165,45 @@ bool TreeMapWidget<T>::render(const char *label, const ImVec2 &size,
         canvas_size_ = current_canvas_size;
     }
 
-    ImDrawList *draw_list = ImGui::GetWindowDrawList();
-
-    // Set up clipping rectangle
-    draw_list->PushClipRect(
-        canvas_pos,
-        ImVec2(canvas_pos.x + canvas_size_.x, canvas_pos.y + canvas_size_.y),
-        true);
-
-    ImGui::InvisibleButton("treemap_canvas", canvas_size_);
+    ImGui::InvisibleButton("treemap_canvas", canvas_size_.to_imvec2());
     ImGui::SetItemKeyOwner(ImGuiKey_MouseWheelY);
 
-    bool is_hovered = ImGui::IsItemHovered();
-    bool clicked = false;
-
     // Handle input
-    if (is_hovered) {
-        ImVec2 mouse_pos = ImGui::GetMousePos();
+    if (ImGui::IsItemHovered()) {
+        const auto mouse_pos =
+            WindowCoordinate::from_imvec2(ImGui::GetMousePos());
+        const TreemapCoordinate map_mouse_pos =
+            to_treemap(to_canvas(mouse_pos, canvas_pos), pan_, zoom_);
 
-        // Zoom with mouse wheel
         float wheel = ImGui::GetIO().MouseWheel;
         if (wheel != 0.0f) {
-            // Zoom towards mouse position
-            ImVec2 world_mouse_pos = screen_to_world(mouse_pos, canvas_pos);
+            // Store the treemap coordinate under mouse BEFORE zoom change
+            const TreemapCoordinate old_map_mouse_pos = map_mouse_pos;
 
-            float old_zoom = zoom_level_;
-            zoom_level_ *= (1.0f + wheel * ZOOM_SPEED);
-            zoom_level_ = std::clamp(zoom_level_, MIN_ZOOM, MAX_ZOOM);
+            const float old_zoom = zoom_;
+            zoom_ *= (1.0f + wheel * ZOOM_SPEED);
+            zoom_ = std::clamp(zoom_, MIN_ZOOM, MAX_ZOOM);
 
-            // Adjust pan to zoom towards mouse
-            if (zoom_level_ != old_zoom) {
-                float zoom_factor = zoom_level_ / old_zoom;
-                ImVec2 new_world_mouse_pos =
-                    screen_to_world(mouse_pos, canvas_pos);
-                pan_offset_.x += (world_mouse_pos.x - new_world_mouse_pos.x);
-                pan_offset_.y += (world_mouse_pos.y - new_world_mouse_pos.y);
-            }
+            // Calculate new treemap coordinate under mouse AFTER zoom
+            const TreemapCoordinate new_map_mouse_pos =
+                to_treemap(to_canvas(mouse_pos, canvas_pos), pan_, zoom_);
+
+            // Adjust pan to keep the same point under the mouse
+            pan_.x += (old_map_mouse_pos.x - new_map_mouse_pos.x);
+            pan_.y += (old_map_mouse_pos.y - new_map_mouse_pos.y);
         }
 
-        // Pan with middle mouse or right mouse drag
-        if (ImGui::IsMouseClicked(ImGuiMouseButton_Middle) ||
-            ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
-            is_panning_ = true;
-            last_mouse_pos_ = mouse_pos;
+        // Handle panning
+        if (ImGui::IsMouseDragging(ImGuiMouseButton_Middle)) {
+            const ImVec2 delta =
+                ImGui::GetMouseDragDelta(ImGuiMouseButton_Middle);
+            pan_.x -= delta.x / zoom_;
+            pan_.y -= delta.y / zoom_;
+            ImGui::ResetMouseDragDelta(ImGuiMouseButton_Middle);
         }
 
-        // Node hover detection (transform mouse to world coordinates)
-        ImVec2 world_mouse_pos = screen_to_world(mouse_pos, canvas_pos);
-        const auto *currently_hovered_node =
-            treemap::hit_test(world_mouse_pos, layout_.leaves, ImVec2(0, 0));
+        const auto *currently_hovered_node = treemap::hit_test(
+            map_mouse_pos.to_imvec2(), layout_.leaves, ImVec2(0, 0));
 
         // Only execute callbacks if hovered node changed and is currently not
         // nullptr
@@ -220,35 +215,41 @@ bool TreeMapWidget<T>::render(const char *label, const ImVec2 &size,
         hovered_node_ = currently_hovered_node;
 
         // Handle left click
-        if (hovered_node_ && ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
-            !is_panning_) {
+        if (hovered_node_ && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
             selected_node_ = hovered_node_;
             for (const auto &callback : node_clicked_cbs_) {
                 callback(*hovered_node_);
             }
-            clicked = true;
         }
+
+        last_mouse_pos_ = mouse_pos;
     }
 
-    // Handle panning
-    if (is_panning_) {
-        if (ImGui::IsMouseDragging(ImGuiMouseButton_Middle) ||
-            ImGui::IsMouseDragging(ImGuiMouseButton_Right)) {
-            ImVec2 mouse_pos = ImGui::GetMousePos();
-            ImVec2 delta = ImVec2(mouse_pos.x - last_mouse_pos_.x,
-                                  mouse_pos.y - last_mouse_pos_.y);
-            pan_offset_.x += delta.x / zoom_level_;
-            pan_offset_.y += delta.y / zoom_level_;
-            last_mouse_pos_ = mouse_pos;
-        } else {
-            is_panning_ = false;
-        }
-    }
+    ImDrawList *draw_list = ImGui::GetWindowDrawList();
+
+    // Set up clipping rectangle
+    draw_list->PushClipRect(
+        canvas_pos.to_imvec2(),
+        ImVec2(canvas_pos.x + canvas_size_.x, canvas_pos.y + canvas_size_.y),
+        true);
 
     // Render rectangles with culling
+    const TreemapCoordinate canvas_origin_map_coords =
+        to_treemap(CanvasCoordinate{.x = 0.0F, .y = 0.0F}, pan_, zoom_);
+    // Size in treemap coordinates is canvas size divided by zoom
+    const float treemap_width = current_canvas_size.x / zoom_;
+    const float treemap_height = current_canvas_size.y / zoom_;
+
+    const treemap::Rect canvas_rect{
+        .x = canvas_origin_map_coords.x,
+        .y = canvas_origin_map_coords.y,
+        .width = treemap_width,
+        .height = treemap_height,
+    };
+
     for (auto &rect : layout_.leaves) {
         // Skip rectangles outside view
-        if (!is_rect_visible(rect.rect_, canvas_pos, canvas_size_)) {
+        if (!treemap::overlaps(rect.rect_, canvas_rect)) {
             continue;
         }
 
@@ -275,46 +276,51 @@ bool TreeMapWidget<T>::render(const char *label, const ImVec2 &size,
             fill_color = IM_COL32(255, 255, 0, 100);
         }
 
-        // Transform to screen coordinates
-        ImVec2 screen_min =
-            world_to_screen(ImVec2(rect.rect_.x, rect.rect_.y), canvas_pos);
-        ImVec2 screen_max =
-            world_to_screen(ImVec2(rect.rect_.x + rect.rect_.width,
-                                   rect.rect_.y + rect.rect_.height),
-                            canvas_pos);
+        const WindowCoordinate win_min = to_window(
+            to_canvas(TreemapCoordinate{.x = rect.rect_.x, .y = rect.rect_.y},
+                      pan_, zoom_),
+            canvas_pos);
+        const WindowCoordinate win_max = to_window(
+            to_canvas(TreemapCoordinate{.x = rect.rect_.x + rect.rect_.width,
+                                        .y = rect.rect_.y + rect.rect_.height},
+                      pan_, zoom_),
+            canvas_pos);
+        ;
 
-        draw_list->AddRectFilled(screen_min, screen_max, fill_color);
+        draw_list->AddRectFilled(win_min.to_imvec2(), win_max.to_imvec2(),
+                                 fill_color);
 
         // Only draw borders if rectangle is reasonably sized
-        if ((screen_max.x - screen_min.x) > 2.0f &&
-            (screen_max.y - screen_min.y) > 2.0f) {
-            draw_list->AddRect(screen_min, screen_max,
+        if ((win_max.x - win_min.x) > 2.0f && (win_max.y - win_min.y) > 2.0f) {
+            draw_list->AddRect(win_min.to_imvec2(), win_max.to_imvec2(),
                                IM_COL32(255, 255, 255, 180), 0.0f, 0, 0.5f);
         }
     }
 
     // Render frames
     for (auto &frame : layout_.frames) {
-        if (!is_rect_visible(frame.rect_, canvas_pos, canvas_size_)) {
+        if (!treemap::overlaps(frame.rect_, canvas_rect)) {
             continue;
         }
 
-        ImVec2 screen_min =
-            world_to_screen(ImVec2(frame.rect_.x, frame.rect_.y), canvas_pos);
-        ImVec2 screen_max =
-            world_to_screen(ImVec2(frame.rect_.x + frame.rect_.width,
-                                   frame.rect_.y + frame.rect_.height),
-                            canvas_pos);
+        const WindowCoordinate win_min = to_window(
+            to_canvas(TreemapCoordinate{.x = frame.rect_.x, .y = frame.rect_.y},
+                      pan_, zoom_),
+            canvas_pos);
+        const WindowCoordinate win_max = to_window(
+            to_canvas(
+                TreemapCoordinate{.x = frame.rect_.x + frame.rect_.width,
+                                  .y = frame.rect_.y + frame.rect_.height},
+                pan_, zoom_),
+            canvas_pos);
 
-        if ((screen_max.x - screen_min.x) > 4.0f &&
-            (screen_max.y - screen_min.y) > 4.0f) {
-            draw_list->AddRect(screen_min, screen_max, IM_COL32(0, 0, 0, 180),
-                               0.0f, 0, 2.0f);
+        if ((win_max.x - win_min.x) > 4.0f && (win_max.y - win_min.y) > 4.0f) {
+            draw_list->AddRect(win_min.to_imvec2(), win_max.to_imvec2(),
+                               IM_COL32(0, 0, 0, 180), 0.0f, 0, 2.0f);
         }
     }
 
     draw_list->PopClipRect();
 
     ImGui::EndChild();
-    return clicked;
 }

@@ -106,6 +106,7 @@ add_executable(prism
     src/main.cpp 
     src/filesystem_node.cpp
     src/treemap.cpp
+    src/treemap_widget.cpp
     src/filesystem_view.cpp
     src/ast_node.cpp
     src/ast_generation.cpp
