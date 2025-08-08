@@ -92,11 +92,6 @@ template <treemap::TreeNode T> class TreeMapWidget
     static constexpr float ZOOM_SPEED = 0.1f;
 
     treemap::Layout<T> layout_;
-
-    // Rendering methods
-    std::vector<std::pair<const T *, treemap::Rect>>
-    position_row(const std::vector<const T *> &row,
-                 const treemap::Rect &available_rect);
 };
 
 // Template implementation
