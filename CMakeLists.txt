@@ -11,7 +11,8 @@ endif()
 
 # Add options to control profiling and Tracy separately
 option(ENABLE_PROFILING_FLAGS "Enable profiling-friendly build flags" ON)
-option(ENABLE_TRACY "Enable Tracy instrumentation" ON)
+option(ENABLE_TRACY "Enable Tracy instrumentation" OFF)
+option(ENABLE_TESTS "Enable tests" OFF)
 
 # Apply profiling flags if enabled
 if(ENABLE_PROFILING_FLAGS)
@@ -43,13 +44,6 @@ if (ENABLE_TRACY)
     message(STATUS "MAIN: defining TRACY_ENABLE")
     add_definitions(-DTRACY_ENABLE)
 endif()
-
-FetchContent_Declare(
-    Catch2
-    GIT_REPOSITORY https://github.com/catchorg/Catch2.git
-    GIT_TAG        v3.4.0
-)
-FetchContent_MakeAvailable(Catch2)
 
 FetchContent_Declare(
     imgui
@@ -134,22 +128,7 @@ target_link_libraries(prism
         clangTooling
 )
 
-# Enable testing
-enable_testing()
-
-# Test executable
-add_executable(layout_tests
-    tests/test_layout.cpp
-    src/filesystem_node.cpp
-    src/treemap.cpp
-)
-
-target_link_libraries(layout_tests
-    PRIVATE
-        Catch2::Catch2WithMain
-)
-
-foreach(target prism layout_tests)
+foreach(target prism)
     target_compile_features(${target} PRIVATE cxx_std_23)
 
     if(ENABLE_TRACY)
@@ -167,7 +146,32 @@ foreach(target prism layout_tests)
     endif()
 endforeach()
 
+
+if (ENABLE_TESTS)
+FetchContent_Declare(
+    Catch2
+    GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+    GIT_TAG        v3.4.0
+)
+FetchContent_MakeAvailable(Catch2)
+
+enable_testing()
+
+# Test executable
+add_executable(layout_tests
+    tests/test_layout.cpp
+    src/filesystem_node.cpp
+    src/treemap.cpp
+)
+
+target_link_libraries(layout_tests
+    PRIVATE
+        Catch2::Catch2WithMain
+)
+
 # Register test with CTest
 include(CTest)
 include(Catch)
 catch_discover_tests(layout_tests)
+endif()
+
