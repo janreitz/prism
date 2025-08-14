@@ -25,8 +25,8 @@ parse_matcher_expression(const std::string &matcher_expression)
     auto result = clang::ast_matchers::dynamic::Parser::parseMatcherExpression(
         ref, &diagnostics);
 
-    if (result.has_value()) {
-        return result.value();
+    if (result.hasValue()) {
+        return result.getValue();
     } else {
         return std::unexpected(diagnostics.toStringFull());
     }

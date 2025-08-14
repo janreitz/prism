@@ -13,7 +13,7 @@ parse_ast_from_string(const std::string &source_code,
                       const std::vector<std::string> &args,
                       const std::string &file_name);
 
-using ProgressCallback = std::function<void(int completed, int total,
+using ProgressCallback = std::function<void(size_t completed, size_t total,
                                             const std::string &current_file)>;
 using ErrorCallback = std::function<void(const std::string &error_message)>;
 

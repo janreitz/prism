@@ -387,10 +387,17 @@ void ASTMatcherView::render_parse_progress()
                   parse_progress_.total_file_count
             : 0.0f;
 
-    std::string progress_text =
-        std::string("Parsing ") + parse_progress_.current_file + '(' +
-        std::to_string(parse_progress_.processed_file_count) + '/' +
-        std::to_string(parse_progress_.total_file_count) + ')';
+    std::string progress_text;
+
+    if (parse_progress_.processed_file_count <
+        parse_progress_.total_file_count) {
+        progress_text =
+            std::string("Parsing ") + parse_progress_.current_file + '(' +
+            std::to_string(parse_progress_.processed_file_count) + '/' +
+            std::to_string(parse_progress_.total_file_count) + ')';
+    } else {
+        progress_text = "";
+    }
 
     ImGui::PushStyleColor(ImGuiCol_PlotHistogram,
                           ImVec4(0.0f, 0.8f, 0.2f, 1.0f)); // Green fill

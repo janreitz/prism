@@ -36,39 +36,19 @@ class ProgressConsumer : public clang::DiagnosticConsumer
     void BeginSourceFile(const clang::LangOptions &LangOpts,
                          const clang::Preprocessor *PP = nullptr) override
     {
-
-        std::cerr << "Starting to process file number " << processed_file_count_
-                  << std::endl;
-
-        if (PP) {
-            auto &SM = PP->getSourceManager();
-            auto FID = SM.getMainFileID();
-            if (FID.isValid()) {
-                if (auto *Entry = SM.getFileEntryForID(FID)) {
-                    std::cerr << "Processing file: " << Entry->getName().data()
-                              << std::endl;
-                    current_file_ = Entry->getName();
-                }
-            } else {
-                std::cerr << "MainFileID invalid" << std::endl;
-                current_file_ = "unknown";
-            }
-        } else {
-            std::cerr << std::source_location().function_name()
-                      << "(no preprocessor)" << std::endl;
-            current_file_ = "unknown";
-        }
-        if (progress_callback_.has_value()) {
-            progress_callback_.value()(processed_file_count_, total_file_count_,
-                                       current_file_);
-        }
-
-        processed_file_count_++;
+        processing_new_file_ = true;
     }
 
     // Callback to inform the diagnostic client that processing of a source
     // file has ended.
-    void EndSourceFile() override {}
+    void EndSourceFile() override
+    {
+        processed_file_count_++;
+        if (progress_callback_.has_value()) {
+            progress_callback_.value()(processed_file_count_, total_file_count_,
+                                       current_file_);
+        }
+    }
 
     // Callback to inform the diagnostic client that processing of all
     // source files has ended.
@@ -87,9 +67,28 @@ class ProgressConsumer : public clang::DiagnosticConsumer
     void HandleDiagnostic(clang::DiagnosticsEngine::Level DiagLevel,
                           const clang::Diagnostic &Info) override
     {
+        if (!processing_new_file_) {
+            return;
+        }
+
+        processing_new_file_ = false;
+
+        const auto &source_man = Info.getSourceManager();
+        const auto current_file_id = source_man.getFileID(Info.getLocation());
+
+        if (const auto *file_entry =
+                source_man.getFileEntryForID(current_file_id)) {
+            current_file_ = file_entry->getName();
+        }
+
+        if (progress_callback_.has_value()) {
+            progress_callback_.value()(processed_file_count_, total_file_count_,
+                                       current_file_);
+        }
     }
 
   private:
+    bool processing_new_file_ = true;
     size_t processed_file_count_ = 0;
     size_t total_file_count_ = 0;
     size_t diagnostic_count_ = 0;
